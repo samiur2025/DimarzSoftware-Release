@@ -41,6 +41,8 @@ pub fn run() {
             commands::clear_all_leads_cmd,
             commands::import_leads_csv,
             commands::export_leads_csv,
+            commands::backup_database,
+            commands::restore_database,
             commands::audit_csv_cmd,
             commands::commit_csv_cmd,
             commands::get_clients,

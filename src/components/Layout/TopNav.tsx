@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState, useEffect, useRef } from "react";
 import { AppContext, type PageId } from "../../App";
 interface Props {
 currentPage: PageId;
@@ -6,9 +6,27 @@ showPage: (page: PageId) => void;
 onMenuToggle: () => void;
 }
 const TopNav: React.FC<Props> = ({ currentPage, showPage, onMenuToggle }) => {
-const { agency, triggerRefresh } = useContext(AppContext);
+const { agency, triggerRefresh, logout } = useContext(AppContext);
 const shortName = agency.name.split(' - ')[0] || agency.name;
 const initials = shortName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase() || 'DZ';
+
+const [showNotifs, setShowNotifs] = useState(false);
+const [showProfile, setShowProfile] = useState(false);
+const notifRef = useRef<HTMLDivElement>(null);
+const profileRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  const handleClickOutside = (e: MouseEvent) => {
+    if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+      setShowNotifs(false);
+    }
+    if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+      setShowProfile(false);
+    }
+  };
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => document.removeEventListener("mousedown", handleClickOutside);
+}, []);
 
 const Icon = ({ path }: { path: React.ReactNode }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -89,16 +107,70 @@ onClick={() => showPage(item.id)}
 <button className="notification-btn" onClick={() => triggerRefresh()} title="Force Refresh Data" style={{ marginRight: 8 }}>
 <span>🔄</span>
 </button>
-<button className="notification-btn">
-<span>🔔</span>
-<span className="badge">3</span>
-</button>
-<div className="user-profile">
-<div className="user-avatar">AD</div>
-<div className="user-info">
-<span className="user-name">Admin {shortName}</span>
-<span className="user-role">{agency.location}</span>
+<div className="notification-wrapper" ref={notifRef} style={{ position: "relative" }}>
+  <button className="notification-btn" onClick={() => setShowNotifs(!showNotifs)}>
+    <span>🔔</span>
+    <span className="badge">3</span>
+  </button>
+  
+  {showNotifs && (
+    <div className="notification-dropdown">
+      <div className="notification-header">
+        <span>Notifications</span>
+        <span className="mark-read">Mark all as read</span>
+      </div>
+      <div className="notification-list">
+        <div className="notification-item unread">
+          <div className="notif-icon">📥</div>
+          <div className="notif-content">
+            <p><strong>Export Completed</strong></p>
+            <p>1,250 leads successfully exported to CSV.</p>
+            <span className="notif-time">2 mins ago</span>
+          </div>
+        </div>
+        <div className="notification-item unread">
+          <div className="notif-icon">⚡</div>
+          <div className="notif-content">
+            <p><strong>System Activated</strong></p>
+            <p>Dimrz Leads Software is securely activated on this device.</p>
+            <span className="notif-time">1 hour ago</span>
+          </div>
+        </div>
+        <div className="notification-item">
+          <div className="notif-icon">🎉</div>
+          <div className="notif-content">
+            <p><strong>Welcome Aboard!</strong></p>
+            <p>Start searching through millions of leads instantly.</p>
+            <span className="notif-time">1 day ago</span>
+          </div>
+        </div>
+      </div>
+      <div className="notification-footer">
+        View All Notifications
+      </div>
+    </div>
+  )}
 </div>
+<div className="user-profile-wrapper" ref={profileRef} style={{ position: "relative" }}>
+  <div className="user-profile" onClick={() => setShowProfile(!showProfile)}>
+    <div className="user-avatar">AD</div>
+    <div className="user-info">
+      <span className="user-name">Admin {shortName}</span>
+      <span className="user-role">{agency.location}</span>
+    </div>
+  </div>
+  
+  {showProfile && (
+    <div className="notification-dropdown" style={{ width: "200px", marginTop: "4px" }}>
+      <div className="nav-dropdown-item" onClick={() => { setShowProfile(false); showPage("settings"); }}>
+        <span>⚙️</span> Settings
+      </div>
+      <div style={{ borderTop: "1px solid var(--border-color)", margin: "4px 0" }}></div>
+      <div className="nav-dropdown-item" onClick={() => { setShowProfile(false); logout(); }} style={{ color: "var(--accent-red)" }}>
+        <span>🔒</span> Lock App
+      </div>
+    </div>
+  )}
 </div>
 </div>
 </nav>

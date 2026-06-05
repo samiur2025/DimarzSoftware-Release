@@ -64,6 +64,35 @@ pub async fn commit_csv_cmd(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn backup_database(
+    file_path: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.backup_leads(&file_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn restore_database(
+    file_path: String,
+    replace: bool,
+    app_handle: tauri::AppHandle,
+) -> Result<i64, String> {
+    tokio::task::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.restore_leads(&file_path, replace)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 // ─── Fast synchronous commands (DB reads/writes) ──────────────────────────────
 // These use State<> directly — safe, simple, and correct for DuckDB's non-Send Connection.
 

@@ -7,6 +7,7 @@ import SidebarFilter from "./components/Layout/SidebarFilter";
 import LoadingOverlay from "./components/Common/LoadingOverlay";
 import ToastContainer from "./components/Common/ToastContainer";
 import ActivationScreen from "./components/License/ActivationScreen";
+import LoginPage from "./components/Pages/LoginPage";
 
 import LeadsPage from "./components/Pages/LeadsPage";
 
@@ -20,11 +21,12 @@ import GoogleFormScriptPage from "./components/Pages/GoogleFormScriptPage";
 import SettingsPage from "./components/Pages/SettingsPage";
 import AdminPage from "./components/Pages/AdminPage";
 import PlaceholderPage from "./components/Pages/PlaceholderPage";
+import BackupPage from "./components/Pages/BackupPage";
 
 export type PageId =
   | "leads" | "clients" | "projects"
   | "team" | "myTeam" | "import" | "validator" | "leadSummary" | "mailServer"
-  | "admin" | "gformScript" | "settings";
+  | "admin" | "gformScript" | "settings" | "backup";
 
 export interface Toast {
   id: number;
@@ -80,6 +82,7 @@ export const AppContext = React.createContext<{
   setLeadsFilters: React.Dispatch<React.SetStateAction<LeadsFilters>>;
   refreshTrigger: number;
   triggerRefresh: () => void;
+  logout: () => void;
 }>({
   currentPage: "leads",
   showPage: () => {},
@@ -93,10 +96,12 @@ export const AppContext = React.createContext<{
   setLeadsFilters: () => {},
   refreshTrigger: 0,
   triggerRefresh: () => {},
+  logout: () => {},
 });
 
 const App: React.FC = () => {
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<PageId>("leads");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,6 +113,8 @@ const App: React.FC = () => {
   const triggerRefresh = useCallback(() => {
     setRefreshTrigger(prev => prev + 1);
   }, []);
+
+
 
   useEffect(() => {
     // In dev mode, bypass license check for easier development
@@ -126,6 +133,12 @@ const App: React.FC = () => {
     if (storedAgency) {
       setAgency(JSON.parse(storedAgency));
     }
+    
+    // Check if app lock is enabled
+    const hasAppLock = localStorage.getItem("dimrz_app_lock_password");
+    if (!hasAppLock) {
+      setIsAuthenticated(true);
+    }
   }, []);
 
   const showPage = useCallback((page: PageId) => {
@@ -140,6 +153,15 @@ const App: React.FC = () => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 3000);
   }, []);
+
+  const logout = useCallback(() => {
+    const hasAppLock = localStorage.getItem("dimrz_app_lock_password");
+    if (hasAppLock) {
+      setIsAuthenticated(false);
+    } else {
+      showToast("No lock password is set. Go to Settings to set one.", "info");
+    }
+  }, [showToast]);
 
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
@@ -180,10 +202,14 @@ const App: React.FC = () => {
     return <ActivationScreen onActivated={handleActivated} />;
   }
 
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={() => setIsAuthenticated(true)} />;
+  }
+
   const isFilterPage = currentPage === "leads";
 
   return (
-    <AppContext.Provider value={{ currentPage, showPage, toasts, showToast, loading, setLoading, agency, setAgency, leadsFilters, setLeadsFilters, refreshTrigger, triggerRefresh }}>
+    <AppContext.Provider value={{ currentPage, showPage, toasts, showToast, loading, setLoading, agency, setAgency, leadsFilters, setLeadsFilters, refreshTrigger, triggerRefresh, logout }}>
       <LoadingOverlay active={loading} />
       <ToastContainer toasts={toasts} />
 
@@ -221,6 +247,7 @@ const App: React.FC = () => {
 
           <GoogleFormScriptPage className={currentPage === "gformScript" ? "page-block active" : "page-block"} />
           <SettingsPage className={currentPage === "settings" ? "page-block active" : "page-block"} />
+          <BackupPage className={currentPage === "backup" ? "page-block active" : "page-block"} />
         </div>
       </div>
     </AppContext.Provider>

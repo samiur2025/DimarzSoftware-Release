@@ -248,6 +248,45 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         })
     }
 
+    pub fn backup_leads(&self, file_path: &str) -> Result<(), String> {
+        let query = format!(
+            "COPY (SELECT * FROM leads WHERE is_deleted=false) TO '{}' (FORMAT PARQUET)",
+            file_path.replace("'", "''")
+        );
+        self.conn.execute(&query, []).map_err(|e| format!("Failed to backup database to Parquet: {}", e))?;
+        Ok(())
+    }
+
+    pub fn restore_leads(&self, file_path: &str, replace: bool) -> Result<i64, String> {
+        let count_before: i64 = self.conn.query_row("SELECT COUNT(*) FROM leads", [], |r| r.get(0)).unwrap_or(0);
+
+        if replace {
+            // Wipe the existing leads table
+            self.conn.execute("DELETE FROM leads", []).map_err(|e| e.to_string())?;
+            
+            // Insert everything exactly as it was
+            let query = format!(
+                "INSERT INTO leads SELECT * FROM read_parquet('{}')",
+                file_path.replace("'", "''")
+            );
+            self.conn.execute(&query, []).map_err(|e| format!("Failed to restore from Parquet: {}", e))?;
+        } else {
+            // Merge logic: Map explicit columns and assign new SL/IDs
+            let standard_cols = "country, industry, niche, business_name, person_name, title, business_email, phone, address, city, state, website, person_linkedin, company_linkedin, personal_email, revenue, size, additional_info, generated_person, status, priority, source, last_contact, assigned_to";
+            
+            let query = format!(
+                "INSERT INTO leads ({}, sl) SELECT {}, (SELECT COALESCE(MAX(sl), 0) FROM leads) + row_number() OVER () FROM read_parquet('{}')",
+                standard_cols, standard_cols, file_path.replace("'", "''")
+            );
+            self.conn.execute(&query, []).map_err(|e| format!("Failed to merge from Parquet: {}", e))?;
+        }
+
+        let count_after: i64 = self.conn.query_row("SELECT COUNT(*) FROM leads", [], |r| r.get(0)).unwrap_or(0);
+        let imported = (count_after - count_before).max(0) as i64;
+
+        Ok(imported)
+    }
+
     pub fn export_leads_csv(&self, file_path: &str, payload: ExportPayload) -> Result<(), String> {
         let mut writer = csv::Writer::from_path(file_path).map_err(|e| e.to_string())?;
         

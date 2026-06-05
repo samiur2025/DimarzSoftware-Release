@@ -326,14 +326,15 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
           <button className="btn btn-secondary" onClick={handleOpenExportModal}>
             <span>📤</span> Export CSV
           </button>
-          <button className="btn btn-primary" onClick={handleImport}>
+          <button className="btn btn-import" onClick={handleImport}>
             <span>📥</span> Import Leads
           </button>
         </div>
       </div>
 
-      <div className="table-wrap">
-        <table className="data-table" id="leadsTable">
+      <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", borderLeft: "1px solid var(--border-color)", borderRight: "1px solid var(--border-color)" }}>
+        <div className="table-wrap">
+          <table className="data-table" id="leadsTable">
           <thead>
             <tr>
               <th style={{ width: 40 }}><input type="checkbox" className="table-checkbox" checked={selectAll} onChange={toggleSelectAll} /></th>
@@ -370,12 +371,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
                 <td><span className="niche-tag">{lead.niche}</span></td>
                 <td>{lead.business_name}</td>
                 <td>{lead.website && <a href={lead.website} target="_blank" rel="noopener noreferrer" className="website-link">{lead.website.replace("https://www.", "")}</a>}</td>
-                <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div className="assigned-avatar">{lead.person_name ? lead.person_name.charAt(0) : "?"}</div>
-                    {lead.person_name}
-                  </div>
-                </td>
+                <td>{lead.person_name}</td>
                 <td style={{ fontStyle: "italic", color: "var(--text-muted)" }}>{lead.title}</td>
                 <td><a href={`mailto:${lead.business_email}`} className="email-link">{lead.business_email}</a></td>
                 <td className="phone-cell">{lead.phone}</td>
@@ -426,6 +422,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
             <button className="page-btn" onClick={() => setPage(totalPages)} disabled={page >= totalPages}>»</button>
           </div>
         </div>
+      </div>
       </div>
 
       {showExportModal && (() => {

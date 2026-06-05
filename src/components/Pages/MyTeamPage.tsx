@@ -113,8 +113,8 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
   });
 
   return (
-    <div className={className} id="myTeamPage">
-      <div style={{ width: "100%", padding: "0 24px", boxSizing: "border-box" }}>
+    <div className={className} id="myTeamPage" style={{ padding: 0, overflow: "hidden", flexDirection: "column" }}>
+      <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
 
         {/* Header */}
         <div className="content-header" style={{ paddingLeft: 0, paddingRight: 0 }}>
@@ -150,9 +150,12 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
+      </div>
+
+      {/* Scrollable Table Area */}
+      <div style={{ padding: "0 24px 24px", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+          <div style={{ flex: 1, overflow: "auto" }}>
             <table className="data-table" style={{ fontSize: 13 }}>
               <thead>
                 <tr>
@@ -218,7 +221,6 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Detail Modal */}

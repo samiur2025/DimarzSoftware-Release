@@ -173,8 +173,8 @@ totalDue: projects.reduce((s, p) => s + p.invoiced, 0) - projects.reduce((s, p) 
 };
 const formatTaka = (n: number) => `৳${n.toLocaleString("en-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 return (
-<div className={className} id="projectsPage">
-<div style={{ width: "100%", padding: "8px 24px 0", boxSizing: "border-box" }}>
+<div className={className} id="projectsPage" style={{ padding: 0, overflow: "hidden", flexDirection: "column" }}>
+<div style={{ padding: "8px 24px 0", flexShrink: 0 }}>
 <div className="content-header" style={{ paddingLeft: 0, paddingRight: 0 }}>
 <div className="header-left">
 <div>
@@ -219,7 +219,9 @@ return (
 </div>
 ))}
 </div>
-<div className="card" style={{ padding: 0, overflow: "hidden" }}>
+</div>
+<div style={{ padding: "0 24px 24px", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+<div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
 <div style={{ fontSize: 14, fontWeight: 600 }}>Active Projects</div>
 <div className="search-box" style={{ position: "relative", width: 260 }}>
@@ -227,7 +229,7 @@ return (
 <input type="text" placeholder="Search projects..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", padding: "6px 10px 6px 32px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-primary)", fontSize: 12, outline: "none" }} />
 </div>
 </div>
-<div style={{ overflowX: "auto" }}>
+<div style={{ flex: 1, overflow: "auto" }}>
 <table className="data-table" id="projectsTable" style={{ fontSize: 13 }}>
 <thead>
 <tr>

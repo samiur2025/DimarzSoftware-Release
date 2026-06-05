@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import TopNav from "./components/Layout/TopNav";
 import SidebarNav from "./components/Layout/SidebarNav";
 import SidebarFilter from "./components/Layout/SidebarFilter";
@@ -113,8 +114,12 @@ const App: React.FC = () => {
     if (import.meta.env.DEV) {
       setIsActivated(true);
     } else {
-      const activated = localStorage.getItem("dimrz_activated");
-      setIsActivated(activated === "true");
+      invoke<boolean>("check_license")
+        .then((isValid) => setIsActivated(isValid))
+        .catch((e) => {
+          console.error("License check error:", e);
+          setIsActivated(false);
+        });
     }
 
     const storedAgency = localStorage.getItem("dimrz_settings_agency");
@@ -159,7 +164,6 @@ const App: React.FC = () => {
   }, [showToast, triggerRefresh]);
 
   const handleActivated = () => {
-    localStorage.setItem("dimrz_activated", "true");
     setIsActivated(true);
     showToast("License activated successfully", "success");
   };

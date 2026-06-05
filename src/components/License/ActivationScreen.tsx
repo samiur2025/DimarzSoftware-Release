@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface Props {
   onActivated: () => void;
@@ -28,11 +29,16 @@ const ActivationScreen: React.FC<Props> = ({ onActivated }) => {
     }
     setLoading(true);
     setError(null);
-    // Simulate activation (browser mode - any key works as demo)
-    await new Promise(r => setTimeout(r, 1200));
-    setSuccess(true);
-    setTimeout(onActivated, 1200);
-    setLoading(false);
+    
+    try {
+      await invoke("activate_license", { licenseKey: licenseKey });
+      setSuccess(true);
+      setTimeout(onActivated, 1200);
+    } catch (err: any) {
+      setError(typeof err === "string" ? err : "Failed to activate license.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

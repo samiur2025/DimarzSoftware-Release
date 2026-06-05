@@ -73,9 +73,14 @@ const ImportPage: React.FC<Props> = ({ className }) => {
 
   const handleDownloadTemplate = (e: React.MouseEvent) => {
     e.preventDefault();
-    const headers = ["Country", "Industry", "Niche", "Business Name", "Website", "Person Name", "Title", "Business Email", "Phone", "City", "State", "Revenue", "Size", "Status", "Generated"];
+    const headers = [
+      "COUNTRY", "INDUSTRY", "NICHE", "BUSINESS NAME", "WEBSITE", 
+      "PERSON NAME", "TITLE", "BUSINESS EMAIL", "PHONE", "ADDRESS", 
+      "CITY", "STATE", "PERSON LINKEDIN", "COMPANY LINKEDIN", 
+      "PERSONAL EMAIL", "REVENUE", "SIZE", "ADDITIONAL INFO", "GENERATED PERSON"
+    ];
     const sampleRows = [
-      ["USA", "Technology", "SaaS", "Mock Corp", "mock.com", "John Doe", "CEO", "john@mock.com", "555-1001", "San Francisco", "CA", "$1M", "1-10", "New", "Auto"],
+      ["USA", "Technology", "SaaS", "Mock Corp", "mock.com", "John Doe", "CEO", "john@mock.com", "555-1001", "123 Tech St", "San Francisco", "CA", "linkedin.com/in/johndoe", "linkedin.com/company/mock", "personal@email.com", "$1M", "1-10", "Interested", "Auto"],
     ];
     const csvContent = [headers.join(","), ...sampleRows.map(row => row.map(cell => `"${cell}"`).join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -103,10 +108,19 @@ const ImportPage: React.FC<Props> = ({ className }) => {
         input.click();
         return;
       }
-      const path = await open({ filters: [{ name: "CSV", extensions: ["csv"] }], multiple: false });
-      if (path && typeof path === "string") {
-        const name = path.split(/[/\\]/).pop() || "unknown.csv";
-        setSelectedFile({ path, name });
+      const result = await open({ filters: [{ name: "CSV", extensions: ["csv"] }], multiple: false });
+      if (result) {
+        let pathStr = "";
+        if (typeof result === "string") {
+          pathStr = result;
+        } else if (typeof result === "object" && (result as any).path) {
+          pathStr = (result as any).path;
+        }
+        
+        if (pathStr) {
+          const name = typeof result === "object" && (result as any).name ? (result as any).name : pathStr.split(/[/\\]/).pop() || "unknown.csv";
+          setSelectedFile({ path: pathStr, name });
+        }
       }
     } catch (e) {
       showToast(`Failed to select file: ${e}`, "error");

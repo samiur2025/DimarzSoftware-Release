@@ -248,80 +248,125 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         })
     }
 
-    pub fn export_leads_csv(&self, file_path: &str, filter: LeadFilter) -> Result<(), String> {
+    pub fn export_leads_csv(&self, file_path: &str, payload: ExportPayload) -> Result<(), String> {
         let mut writer = csv::Writer::from_path(file_path).map_err(|e| e.to_string())?;
+        
+        let mut conditions = vec!["is_deleted = false".to_string()];
         let mut params_vec: Vec<String> = vec![];
-        let mut conditions = vec!["is_deleted = false"];
-
-        if let Some(search) = &filter.search {
-            if !search.is_empty() {
-                conditions.push("(business_name ILIKE ? OR person_name ILIKE ? OR business_email ILIKE ? OR industry ILIKE ? OR country ILIKE ?)");
-                let pattern = format!("%{}%", search);
-                for _ in 0..5 {
-                    params_vec.push(pattern.clone());
+        
+        // Handle explicit IDs (checked leads)
+        let has_ids = payload.ids.as_ref().map_or(false, |v| !v.is_empty());
+        if let Some(ids) = &payload.ids {
+            if !ids.is_empty() {
+                let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                conditions.push(format!("id IN ({})", placeholders));
+                for id in ids {
+                    params_vec.push(id.to_string());
                 }
             }
         }
-
-        if let Some(statuses) = &filter.status {
-            if !statuses.is_empty() {
-                let placeholders = statuses.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                conditions.push(Box::leak(
-                    format!("status IN ({})", placeholders).into_boxed_str(),
-                ));
-                for s in statuses {
-                    params_vec.push(s.clone());
+        
+        // Handle filter fields (only if IDs are not provided or empty)
+        if !has_ids {
+            let mut add_filter = |col: &str, val: &Option<String>| {
+                if let Some(v) = val {
+                    if !v.is_empty() && !v.starts_with("All ") && !v.starts_with("e.g.") {
+                        let parts: Vec<&str> = v.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                        if !parts.is_empty() {
+                            let or_conds = parts.iter().map(|_| format!("{} ILIKE ?", col)).collect::<Vec<_>>().join(" OR ");
+                            conditions.push(format!("({})", or_conds));
+                            for p in parts {
+                                params_vec.push(format!("%{}%", p));
+                            }
+                        }
+                    }
+                }
+            };
+            
+            add_filter("client", &payload.client);
+            add_filter("additional_info", &payload.additional_info);
+            add_filter("generated_person", &payload.generated_person);
+            add_filter("country", &payload.country);
+            add_filter("state", &payload.state);
+            add_filter("city", &payload.city);
+            add_filter("industry", &payload.industry);
+            add_filter("title", &payload.title);
+            add_filter("status", &payload.status);
+            
+            // Sidebar Array Filters (same logic as get_leads)
+            if let Some(search) = &payload.filter_search {
+                if !search.is_empty() {
+                    conditions.push("(business_name ILIKE ? OR person_name ILIKE ? OR business_email ILIKE ? OR industry ILIKE ? OR country ILIKE ?)".to_string());
+                    let pattern = format!("%{}%", search);
+                    for _ in 0..5 {
+                        params_vec.push(pattern.clone());
+                    }
                 }
             }
+            let mut add_in_clause = |col: &str, vals: &Option<Vec<String>>| {
+                if let Some(v) = vals {
+                    if !v.is_empty() {
+                        let placeholders = v.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                        conditions.push(format!("{} IN ({})", col, placeholders));
+                        for val in v {
+                            params_vec.push(val.clone());
+                        }
+                    }
+                }
+            };
+            add_in_clause("country", &payload.filter_countries);
+            add_in_clause("industry", &payload.filter_industries);
+            add_in_clause("niche", &payload.filter_niches);
+            add_in_clause("status", &payload.filter_statuses);
+            add_in_clause("priority", &payload.filter_priorities);
+            add_in_clause("size", &payload.filter_sizes);
+            add_in_clause("title", &payload.filter_titles);
+            add_in_clause("city", &payload.filter_cities);
+            add_in_clause("state", &payload.filter_states);
+            add_in_clause("generated_person", &payload.filter_generated);
         }
-
+        
         let where_clause = conditions.join(" AND ");
-        let sql = format!("SELECT * FROM leads WHERE {}", where_clause);
+        
+        let mut select_cols = vec!["id".to_string()]; // Default to ID if none selected
+        if !payload.columns.is_empty() {
+            select_cols = payload.columns.clone();
+        }
+        
+        // Write header
+        writer.write_record(&select_cols).map_err(|e| e.to_string())?;
+        
+        // Cast all selected columns to VARCHAR to ensure row.get::<String> works seamlessly
+        let select_clause = select_cols.iter().map(|c| format!("CAST({} AS VARCHAR)", c)).collect::<Vec<_>>().join(", ");
+        let mut sql = format!("SELECT {} FROM leads WHERE {}", select_clause, where_clause);
+        
+        // Handle limit
+        if !has_ids {
+            if let Some(limit_str) = &payload.limit {
+                if let Ok(limit) = limit_str.parse::<i64>() {
+                    sql.push_str(&format!(" LIMIT {}", limit));
+                }
+            }
+        }
+        
         let mut stmt = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
-
+        
         let mut bind_params: Vec<Box<dyn duckdb::ToSql>> = vec![];
         for p in &params_vec {
             bind_params.push(Box::new(p.clone()));
         }
-
-        let lead_iter = stmt
-            .query_map(duckdb::params_from_iter(bind_params.iter()), |row| {
-                Ok(Lead {
-                    id: row.get(0)?,
-                    sl: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
-                    country: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                    industry: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                    niche: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
-                    business_name: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
-                    person_name: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
-                    title: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
-                    business_email: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
-                    phone: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
-                    address: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
-                    city: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
-                    state: row.get::<_, Option<String>>(12)?.unwrap_or_default(),
-                    website: row.get::<_, Option<String>>(13)?.unwrap_or_default(),
-                    person_linkedin: row.get::<_, Option<String>>(14)?.unwrap_or_default(),
-                    company_linkedin: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
-                    personal_email: row.get::<_, Option<String>>(16)?.unwrap_or_default(),
-                    revenue: row.get::<_, Option<String>>(17)?.unwrap_or_default(),
-                    size: row.get::<_, Option<String>>(18)?.unwrap_or_default(),
-                    additional_info: row.get::<_, Option<String>>(19)?.unwrap_or_default(),
-                    generated_person: row.get::<_, Option<String>>(20)?.unwrap_or_default(),
-                    status: row.get::<_, Option<String>>(21)?.unwrap_or_default(),
-                    priority: row.get::<_, Option<String>>(22)?.unwrap_or_default(),
-                    source: row.get::<_, Option<String>>(23)?.unwrap_or_default(),
-                    last_contact: row.get::<_, Option<String>>(24)?.unwrap_or_default(),
-                    assigned_to: row.get::<_, Option<String>>(25)?.unwrap_or_default(),
-                })
-            })
-            .map_err(|e| e.to_string())?;
-
-        for lead_res in lead_iter {
-            if let Ok(lead) = lead_res {
-                writer.serialize(lead).map_err(|e| e.to_string())?;
+        
+        let mut rows = stmt.query(duckdb::params_from_iter(bind_params.iter())).map_err(|e| e.to_string())?;
+        
+        while let Some(row) = rows.next().unwrap_or(None) {
+            let mut record = csv::StringRecord::new();
+            for i in 0..select_cols.len() {
+                let val: Option<String> = row.get(i).unwrap_or(None);
+                record.push_field(&val.unwrap_or_default());
             }
+            writer.write_record(&record).map_err(|e| e.to_string())?;
         }
+        
         writer.flush().map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -1213,6 +1258,31 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
             }
         }
 
+        // Read CSV headers to see which columns actually exist in the file
+        let mut rdr = csv::ReaderBuilder::new()
+            .from_path(&csv_path)
+            .map_err(|e| e.to_string())?;
+        let headers = rdr.headers().map_err(|e| e.to_string())?.clone();
+        
+        let mut available_cols = std::collections::HashSet::new();
+        for h in headers.iter() {
+            available_cols.insert(
+                h.trim()
+                    .to_lowercase()
+                    .replace(['\'', '"'], "")
+                    .replace(' ', "_")
+                    .replace('-', "_")
+            );
+        }
+
+        let get_col = |col: &str, default: &str| -> String {
+            if available_cols.contains(col) {
+                format!("COALESCE(NULLIF(TRIM({}), ''), {})", col, default)
+            } else {
+                default.to_string()
+            }
+        };
+
         // Escape single quotes in paths for SQL safety
         let safe_path = csv_path.replace('\'', "''");
         let safe_client = client_profile.replace('\'', "''");
@@ -1243,27 +1313,27 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
             )
             SELECT
                 new_sl,
-                COALESCE(NULLIF(TRIM(country), ''), NULL),
-                COALESCE(NULLIF(TRIM(industry), ''), NULL),
-                COALESCE(NULLIF(TRIM(niche), ''), NULL),
-                COALESCE(NULLIF(TRIM(business_name), ''), NULL),
-                COALESCE(NULLIF(TRIM(person_name), ''), NULL),
-                COALESCE(NULLIF(TRIM(title), ''), NULL),
-                COALESCE(NULLIF(TRIM(business_email), ''), NULL),
-                COALESCE(NULLIF(TRIM(phone), ''), NULL),
-                COALESCE(NULLIF(TRIM(address), ''), NULL),
-                COALESCE(NULLIF(TRIM(city), ''), NULL),
-                COALESCE(NULLIF(TRIM(state), ''), NULL),
-                COALESCE(NULLIF(TRIM(website), ''), NULL),
-                COALESCE(NULLIF(TRIM(person_linkedin), ''), NULL),
-                COALESCE(NULLIF(TRIM(company_linkedin), ''), NULL),
-                COALESCE(NULLIF(TRIM(personal_email), ''), NULL),
-                COALESCE(NULLIF(TRIM(revenue), ''), NULL),
-                COALESCE(NULLIF(TRIM(size), ''), NULL),
-                COALESCE(NULLIF(TRIM(additional_info), ''), NULL),
-                COALESCE(NULLIF(TRIM(generated_person), ''), 'Auto'),
-                COALESCE(NULLIF(TRIM(status), ''), 'New'),
-                COALESCE(NULLIF(TRIM(priority), ''), 'Medium'),
+                {col_country},
+                {col_industry},
+                {col_niche},
+                {col_business_name},
+                {col_person_name},
+                {col_title},
+                {col_business_email},
+                {col_phone},
+                {col_address},
+                {col_city},
+                {col_state},
+                {col_website},
+                {col_person_linkedin},
+                {col_company_linkedin},
+                {col_personal_email},
+                {col_revenue},
+                {col_size},
+                {col_additional_info},
+                {col_generated_person},
+                {col_status},
+                {col_priority},
                 '{client}',
                 '{workspace}'
             FROM numbered
@@ -1272,6 +1342,27 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
             max_sl = max_sl,
             client = safe_client,
             workspace = safe_workspace,
+            col_country = get_col("country", "NULL"),
+            col_industry = get_col("industry", "NULL"),
+            col_niche = get_col("niche", "NULL"),
+            col_business_name = get_col("business_name", "NULL"),
+            col_person_name = get_col("person_name", "NULL"),
+            col_title = get_col("title", "NULL"),
+            col_business_email = get_col("business_email", "NULL"),
+            col_phone = get_col("phone", "NULL"),
+            col_address = get_col("address", "NULL"),
+            col_city = get_col("city", "NULL"),
+            col_state = get_col("state", "NULL"),
+            col_website = get_col("website", "NULL"),
+            col_person_linkedin = get_col("person_linkedin", "NULL"),
+            col_company_linkedin = get_col("company_linkedin", "NULL"),
+            col_personal_email = get_col("personal_email", "NULL"),
+            col_revenue = get_col("revenue", "NULL"),
+            col_size = get_col("size", "NULL"),
+            col_additional_info = get_col("additional_info", "NULL"),
+            col_generated_person = get_col("generated_person", "'Auto'"),
+            col_status = get_col("status", "'New'"),
+            col_priority = get_col("priority", "'Medium'"),
         );
 
         self.conn.execute(&sql, []).map_err(|e| e.to_string())?;

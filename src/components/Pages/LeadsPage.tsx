@@ -111,6 +111,20 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
   });
   const [exportColumns, setExportColumns] = useState<Set<string>>(new Set(exportAllColumns.map(c => c.id)));
 
+  const handleOpenExportModal = () => {
+    setExportFilters(prev => ({
+      ...prev,
+      country: leadsFilters.countries?.join(', ') || '',
+      stateRegion: leadsFilters.states?.join(', ') || '',
+      city: leadsFilters.cities?.join(', ') || '',
+      industry: leadsFilters.industries?.join(', ') || '',
+      role: leadsFilters.titles?.join(', ') || '',
+      status: leadsFilters.statuses?.length ? leadsFilters.statuses.join(', ') : 'All Statuses',
+      generatedPerson: leadsFilters.generated?.join(', ') || '',
+    }));
+    setShowExportModal(true);
+  };
+
   useEffect(() => {
     fetchLeads();
   }, [page, pageSize, leadsFilters, refreshTrigger]);
@@ -191,6 +205,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
   const handleExport = async () => {
     try {
       const payload = {
+        ids: selected.size > 0 ? Array.from(selected) : null,
         client: exportFilters.client,
         additional_info: exportFilters.additionalInfo,
         generated_person: exportFilters.generatedPerson,
@@ -201,6 +216,19 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
         title: exportFilters.role,
         status: exportFilters.status,
         limit: exportFilters.quantity,
+
+        filter_search: leadsFilters.search,
+        filter_countries: leadsFilters.countries,
+        filter_industries: leadsFilters.industries,
+        filter_niches: leadsFilters.niches,
+        filter_statuses: leadsFilters.statuses,
+        filter_priorities: leadsFilters.priorities,
+        filter_sizes: leadsFilters.sizes,
+        filter_titles: leadsFilters.titles,
+        filter_cities: leadsFilters.cities,
+        filter_states: leadsFilters.states,
+        filter_generated: leadsFilters.generated,
+
         columns: Array.from(exportColumns)
       };
 
@@ -295,7 +323,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
           <button className="btn btn-danger" onClick={handleDelete} disabled={selected.size === 0}>
             <span>🗑</span> Delete
           </button>
-          <button className="btn btn-secondary" onClick={() => setShowExportModal(true)}>
+          <button className="btn btn-secondary" onClick={handleOpenExportModal}>
             <span>📤</span> Export CSV
           </button>
           <button className="btn btn-primary" onClick={handleImport}>
@@ -400,8 +428,17 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
         </div>
       </div>
 
-      {showExportModal && (
-        <div className="modal-overlay active" style={{ zIndex: 10000 }}>
+      {showExportModal && (() => {
+        const renderCountBadge = (val: string, ignoreVal?: string) => {
+          if (!val) return null;
+          if (ignoreVal && val === ignoreVal) return null;
+          const count = val.split(',').filter(s => s.trim().length > 0).length;
+          if (count > 0) return <span className="export-filter-count">{count}</span>;
+          return null;
+        };
+
+        return (
+          <div className="modal-overlay active" style={{ zIndex: 10000 }}>
           <div className="export-modal-card">
             <div className="export-modal-header">
               <h2 className="export-modal-title">Create Filter and Export</h2>
@@ -412,7 +449,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
                 <div className="export-section-title">Filter Set</div>
                 <div className="export-filter-list">
                   <div className="export-filter-item">
-                    <label>Client</label>
+                    <label>Client {renderCountBadge(exportFilters.client, 'All Clients')}</label>
                     <select value={exportFilters.client} onChange={e => setExportFilters({...exportFilters, client: e.target.value})}>
                       <option>All Clients</option>
                       <option>Client A</option>
@@ -420,47 +457,40 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
                     </select>
                   </div>
                   <div className="export-filter-item">
-                    <label>Additional Info</label>
+                    <label>Additional Info {renderCountBadge(exportFilters.additionalInfo)}</label>
                     <input type="text" placeholder="e.g. Special Request" value={exportFilters.additionalInfo} onChange={e => setExportFilters({...exportFilters, additionalInfo: e.target.value})} />
                   </div>
                   <div className="export-filter-item">
-                    <label>Generated Person</label>
+                    <label>Generated Person {renderCountBadge(exportFilters.generatedPerson)}</label>
                     <input type="text" placeholder="e.g. Freelancer Name" value={exportFilters.generatedPerson} onChange={e => setExportFilters({...exportFilters, generatedPerson: e.target.value})} />
                   </div>
                   <div className="export-filter-item">
-                    <label>Country</label>
+                    <label>Country {renderCountBadge(exportFilters.country)}</label>
                     <input type="text" placeholder="e.g. United States" value={exportFilters.country} onChange={e => setExportFilters({...exportFilters, country: e.target.value})} />
                   </div>
                   <div className="export-filter-item">
-                    <label>State / Region</label>
+                    <label>State / Region {renderCountBadge(exportFilters.stateRegion)}</label>
                     <input type="text" placeholder="e.g. New York" value={exportFilters.stateRegion} onChange={e => setExportFilters({...exportFilters, stateRegion: e.target.value})} />
                   </div>
                   <div className="export-filter-item">
-                    <label>City</label>
+                    <label>City {renderCountBadge(exportFilters.city)}</label>
                     <input type="text" placeholder="e.g. Austin" value={exportFilters.city} onChange={e => setExportFilters({...exportFilters, city: e.target.value})} />
                   </div>
                   <div className="export-filter-item">
-                    <label>Industry</label>
+                    <label>Industry {renderCountBadge(exportFilters.industry)}</label>
                     <input type="text" placeholder="e.g. Technology" value={exportFilters.industry} onChange={e => setExportFilters({...exportFilters, industry: e.target.value})} />
                   </div>
                   <div className="export-filter-item">
-                    <label>Role (Title)</label>
+                    <label>Role (Title) {renderCountBadge(exportFilters.role)}</label>
                     <input type="text" placeholder="e.g. CEO" value={exportFilters.role} onChange={e => setExportFilters({...exportFilters, role: e.target.value})} />
                   </div>
                   <div className="export-filter-item">
-                    <label>Status</label>
-                    <select value={exportFilters.status} onChange={e => setExportFilters({...exportFilters, status: e.target.value})}>
-                      <option>All Statuses</option>
-                      <option>New</option>
-                      <option>Contacted</option>
-                      <option>Qualified</option>
-                      <option>Converted</option>
-                      <option>Lost</option>
-                    </select>
+                    <label>Total Filtered Leads</label>
+                    <input type="text" value={selected.size > 0 ? selected.size.toLocaleString() : totalLeads.toLocaleString()} readOnly style={{ color: 'var(--success)', fontWeight: 'bold', backgroundColor: 'rgba(34, 197, 94, 0.05)' }} />
                   </div>
                   <div className="export-filter-item">
-                    <label>Quantity of Leads</label>
-                    <input type="number" className="export-quantity-input" placeholder="" value={exportFilters.quantity} onChange={e => setExportFilters({...exportFilters, quantity: e.target.value})} />
+                    <label>Quantity of Leads {exportFilters.quantity ? <span className="export-filter-count">1</span> : null}</label>
+                    <input type="number" className="export-quantity-input" min="1" placeholder="e.g. 500" value={exportFilters.quantity} onChange={e => setExportFilters({...exportFilters, quantity: e.target.value})} />
                   </div>
                 </div>
               </div>
@@ -485,8 +515,9 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
               <button className="btn-export" onClick={handleExport}>Set and Export</button>
             </div>
           </div>
-        </div>
-      )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

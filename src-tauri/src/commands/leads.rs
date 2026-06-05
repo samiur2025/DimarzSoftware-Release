@@ -1,4 +1,4 @@
-use crate::models::{LeadFilter, PaginatedLeads};
+use crate::models::{ExportPayload, LeadFilter, PaginatedLeads};
 use crate::state::AppState;
 use tauri::Manager;
 
@@ -21,7 +21,7 @@ pub async fn import_leads_csv(
 #[tauri::command]
 pub async fn export_leads_csv(
     file_path: String,
-    filter: LeadFilter,
+    filter: ExportPayload,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {

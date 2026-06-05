@@ -54,6 +54,36 @@ pub struct LeadFilter {
     pub page: i64,
     pub page_size: i64,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ExportPayload {
+    pub ids: Option<Vec<i64>>,
+    pub client: Option<String>,
+    pub additional_info: Option<String>,
+    pub generated_person: Option<String>,
+    pub country: Option<String>,
+    pub state: Option<String>,
+    pub city: Option<String>,
+    pub industry: Option<String>,
+    pub title: Option<String>,
+    pub status: Option<String>,
+    pub limit: Option<String>,
+    
+    pub filter_search: Option<String>,
+    pub filter_countries: Option<Vec<String>>,
+    pub filter_industries: Option<Vec<String>>,
+    pub filter_niches: Option<Vec<String>>,
+    pub filter_statuses: Option<Vec<String>>,
+    pub filter_priorities: Option<Vec<String>>,
+    pub filter_sizes: Option<Vec<String>>,
+    pub filter_titles: Option<Vec<String>>,
+    pub filter_cities: Option<Vec<String>>,
+    pub filter_states: Option<Vec<String>>,
+    pub filter_generated: Option<Vec<String>>,
+    
+    pub columns: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct PaginatedLeads {
     pub leads: Vec<Lead>,

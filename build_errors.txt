@@ -1,0 +1,12 @@
+
+> dimrz-desktop@1.0.0 build
+> tsc && vite build
+
+src/App.tsx(148,65): error TS2345: Argument of type '"warning"' is not assignable to parameter of type '"success" | "error" | "info" | undefined'.
+src/components/Pages/AdminPage.tsx(39,17): error TS6133: 'setStats' is declared but its value is never read.
+src/components/Pages/ImportPage.tsx(159,34): error TS2339: Property 'valid_row_numbers' does not exist on type '{ rows: any[]; stats: any; }'.
+src/components/Pages/ImportPage.tsx(373,196): error TS2339: Property 'valid_row_numbers' does not exist on type '{ rows: any[]; stats: any; }'.
+src/components/Pages/LeadsPage.tsx(96,46): error TS6133: 'setLeadsFilters' is declared but its value is never read.
+src/components/Pages/LeadsPage.tsx(101,10): error TS6133: 'loading' is declared but its value is never read.
+src/components/Pages/LeadsPage.tsx(184,7): error TS2304: Cannot find name 'triggerRefresh'.
+src/components/Pages/LeadsPage.tsx(281,64): error TS2304: Cannot find name 'triggerRefresh'.

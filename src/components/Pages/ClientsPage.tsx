@@ -111,6 +111,15 @@ const deleteProject = (projectId: number) => {
   }
 };
 
+const deleteClient = (clientId: number) => {
+  if (confirm("Are you sure you want to delete this client?")) {
+    setClients(clients.filter(c => c.id !== clientId));
+    if (selectedClient?.id === clientId) {
+      setSelectedClient(null);
+    }
+  }
+};
+
 const filtered = clients.filter(c =>
 c.name.toLowerCase().includes(search.toLowerCase()) ||
 (c.email?.toLowerCase() || "").includes(search.toLowerCase())
@@ -183,7 +192,7 @@ return (
 <td style={{ textAlign: "center" }}>
 <button className="ops-btn view" title="View" onClick={() => setSelectedClient(c)}>👁</button>
 <button className="ops-btn edit" title="Edit">✎</button>
-<button className="ops-btn delete" title="Delete">🗑</button>
+<button className="ops-btn delete" title="Delete" onClick={() => deleteClient(c.id)}>🗑</button>
 </td>
 </tr>
 );

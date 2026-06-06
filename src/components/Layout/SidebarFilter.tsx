@@ -1,6 +1,7 @@
-import React, { useContext, useState, useEffect, useRef } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { AppContext, type LeadsFilters } from "../../App";
 import { invoke } from "@tauri-apps/api/core";
+import { useDebouncedCallback } from "use-debounce";
 
 const isTauri = () => typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI_IPC__' in window || '__TAURI__' in window);
 
@@ -53,28 +54,28 @@ const icons = {
 const SidebarFilter: React.FC<Props> = ({ visible, mobileOpen }) => {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const { leadsFilters, setLeadsFilters, refreshTrigger } = useContext(AppContext);
+  const [isFetching, setIsFetching] = useState(false);
   const [filterCounts, setFilterCounts] = useState<FilterCounts>({
     total_leads: 0, country: [], industry: [], niche: [], size: [], generated: [], title: [], city: [], state: []
   });
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const fetchFilterCounts = useDebouncedCallback(async (currentFilters: LeadsFilters) => {
+    setIsFetching(true);
+    try {
+      const res = await safeInvoke<FilterCounts>("get_filter_counts", {
+        filter: { ...currentFilters, page: 1, page_size: 50 }
+      });
+      if (res && res.country) setFilterCounts(res);
+    } catch (e) {
+      console.error("Failed to fetch filter counts", e);
+    } finally {
+      setIsFetching(false);
+    }
+  }, 800);
 
   useEffect(() => {
-    // Debounce 150ms to avoid hammering the DB on rapid checkbox clicks
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        // Pass the FULL current filter so the backend scopes ALL dropdowns to active selections
-        const res = await safeInvoke<FilterCounts>("get_filter_counts", {
-          filter: { ...leadsFilters, page: 1, page_size: 50 }
-        });
-        if (res && res.country) setFilterCounts(res);
-      } catch (e) {
-        console.error("Failed to fetch filter counts", e);
-      }
-    }, 150);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    fetchFilterCounts(leadsFilters);
   }, [
-    // Re-fetch when ANY filter changes — this makes all dropdowns cascade/dependent
     leadsFilters.search,
     leadsFilters.countries,
     leadsFilters.industries,
@@ -101,7 +102,7 @@ const SidebarFilter: React.FC<Props> = ({ visible, mobileOpen }) => {
     <aside className={`sidebar-filter ${mobileOpen ? "open" : ""}`} id="sidebarFilter" style={{ display: "flex", width: 260 }}>
       <div className="sidebar-filter-header">
         <div className="search-box">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon">{isFetching ? <div className="spinner" style={{width: 14, height: 14, borderWidth: 2, marginRight: 6}} /> : "🔍"}</span>
           <input type="text" placeholder="Search leads, companies, persons..." id="sidebarSearch"
             value={leadsFilters.search}
             onChange={e => setLeadsFilters(prev => ({ ...prev, search: e.target.value }))} />

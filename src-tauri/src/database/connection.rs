@@ -8,12 +8,21 @@ pub struct Database {
 impl Database {
     pub fn new(path: &str) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
+        
+        conn.execute_batch("
+            PRAGMA memory_limit = '4GB';
+            PRAGMA threads = 8;
+            PRAGMA enable_progress_bar = false;
+        ").map_err(|e| format!("Failed to set pragmas: {}", e))?;
+
         let db = Self { conn };
         db.init_tables()?;
-        // if db.get_lead_count()? == 0 {
-        //     db.generate_demo_data()?;
-        // }
         Ok(db)
+    }
+
+    pub fn try_clone(&self) -> Result<Self, String> {
+        let conn = self.conn.try_clone().map_err(|e| e.to_string())?;
+        Ok(Self { conn })
     }
 
     fn init_tables(&self) -> Result<(), String> {
@@ -123,10 +132,10 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 log::warn!("Failed to add is_deleted column: {}", e);
             }
             if let Err(e) = self.conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_leads_is_deleted ON leads(is_deleted)",
+                "CREATE INDEX IF NOT EXISTS idx_leads_is_deleted_sl ON leads(is_deleted, sl)",
                 [],
             ) {
-                log::warn!("Failed to create is_deleted index: {}", e);
+                log::warn!("Failed to create composite is_deleted_sl index: {}", e);
             }
         }
 
@@ -135,12 +144,10 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 
     pub fn import_leads_csv(
-        db_mutex: std::sync::Arc<std::sync::Mutex<Database>>,
+        &self,
         file_path: &str,
     ) -> Result<crate::models::ImportResult, String> {
-        let db = db_mutex.lock().map_err(|e| e.to_string())?;
-
-        let count_before: i64 = db
+        let count_before: i64 = self
             .conn
             .query_row("SELECT COUNT(*) FROM leads", [], |r| r.get(0))
             .unwrap_or(0);
@@ -230,12 +237,12 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         file_path.replace("'", "''")
     );
 
-        if let Err(e) = db.conn.execute(&query, []) {
+        if let Err(e) = self.conn.execute(&query, []) {
             log::error!("DuckDB bulk import failed: {}", e);
             return Err(format!("Failed to import CSV: {}", e));
         }
 
-        let count_after: i64 = db
+        let count_after: i64 = self
             .conn
             .query_row("SELECT COUNT(*) FROM leads", [], |r| r.get(0))
             .unwrap_or(0);
@@ -288,8 +295,6 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     }
 
     pub fn export_leads_csv(&self, file_path: &str, payload: ExportPayload) -> Result<(), String> {
-        let mut writer = csv::Writer::from_path(file_path).map_err(|e| e.to_string())?;
-        
         let mut conditions = vec!["is_deleted = false".to_string()];
         let mut params_vec: Vec<String> = vec![];
         
@@ -372,10 +377,7 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             select_cols = payload.columns.clone();
         }
         
-        // Write header
-        writer.write_record(&select_cols).map_err(|e| e.to_string())?;
-        
-        // Cast all selected columns to VARCHAR to ensure row.get::<String> works seamlessly
+        // Cast all selected columns to VARCHAR to ensure consistent export formatting
         let select_clause = select_cols.iter().map(|c| format!("CAST({} AS VARCHAR)", c)).collect::<Vec<_>>().join(", ");
         let mut sql = format!("SELECT {} FROM leads WHERE {}", select_clause, where_clause);
         
@@ -387,26 +389,23 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 }
             }
         }
-        
-        let mut stmt = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+        // Write directly to file using DuckDB COPY
+        let copy_sql = format!(
+            "COPY ({}) TO '{}' (HEADER, DELIMITER ',')",
+            sql,
+            file_path.replace("'", "''").replace("\\", "\\\\")
+        );
+
+        let mut stmt = self.conn.prepare(&copy_sql).map_err(|e| e.to_string())?;
         
         let mut bind_params: Vec<Box<dyn duckdb::ToSql>> = vec![];
         for p in &params_vec {
             bind_params.push(Box::new(p.clone()));
         }
         
-        let mut rows = stmt.query(duckdb::params_from_iter(bind_params.iter())).map_err(|e| e.to_string())?;
+        stmt.execute(duckdb::params_from_iter(bind_params.iter())).map_err(|e| e.to_string())?;
         
-        while let Some(row) = rows.next().unwrap_or(None) {
-            let mut record = csv::StringRecord::new();
-            for i in 0..select_cols.len() {
-                let val: Option<String> = row.get(i).unwrap_or(None);
-                record.push_field(&val.unwrap_or_default());
-            }
-            writer.write_record(&record).map_err(|e| e.to_string())?;
-        }
-        
-        writer.flush().map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -521,70 +520,65 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     }
 
     pub fn get_filter_counts(&self, filter: LeadFilter) -> Result<FilterCounts, String> {
-        // Build base conditions and params from ALL active filters
-        let build_conditions = |exclude_col: Option<&str>| -> (String, Vec<String>) {
-            let mut conditions = vec!["is_deleted = false".to_string()];
-            let mut params: Vec<String> = vec![];
+        let mut conditions = vec!["is_deleted = false".to_string()];
+        let mut params: Vec<String> = vec![];
 
-            if let Some(search) = &filter.search {
-                if !search.is_empty() {
-                    conditions.push("(business_name ILIKE ? OR person_name ILIKE ? OR business_email ILIKE ? OR industry ILIKE ? OR country ILIKE ?)".to_string());
-                    let s = format!("%{}%", search);
-                    for _ in 0..5 {
-                        params.push(s.clone());
+        if let Some(search) = &filter.search {
+            if !search.is_empty() {
+                conditions.push("(business_name ILIKE ? OR person_name ILIKE ? OR business_email ILIKE ? OR industry ILIKE ? OR country ILIKE ?)".to_string());
+                let s = format!("%{}%", search);
+                for _ in 0..5 {
+                    params.push(s.clone());
+                }
+            }
+        }
+
+        let mut add_in = |col: &str, vals: &Option<Vec<String>>| {
+            if let Some(v) = vals {
+                if !v.is_empty() {
+                    let placeholders = v.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                    conditions.push(format!("{} IN ({})", col, placeholders));
+                    for val in v {
+                        params.push(val.clone());
                     }
                 }
             }
-
-            // Apply each active filter UNLESS it's the column we're computing counts for
-            // (excluding self allows multi-select within the same dimension)
-            let add_in = |col: &str,
-                          vals: &Option<Vec<String>>,
-                          conds: &mut Vec<String>,
-                          ps: &mut Vec<String>| {
-                if Some(col) == exclude_col {
-                    return;
-                }
-                if let Some(v) = vals {
-                    if !v.is_empty() {
-                        let placeholders = v.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                        conds.push(format!("{} IN ({})", col, placeholders));
-                        for val in v {
-                            ps.push(val.clone());
-                        }
-                    }
-                }
-            };
-
-            add_in("country", &filter.country, &mut conditions, &mut params);
-            add_in("industry", &filter.industry, &mut conditions, &mut params);
-            add_in("niche", &filter.niche, &mut conditions, &mut params);
-            add_in("status", &filter.status, &mut conditions, &mut params);
-            add_in("priority", &filter.priority, &mut conditions, &mut params);
-            add_in("size", &filter.size, &mut conditions, &mut params);
-            add_in("title", &filter.title, &mut conditions, &mut params);
-            add_in("city", &filter.city, &mut conditions, &mut params);
-            add_in("state", &filter.state, &mut conditions, &mut params);
-            add_in(
-                "generated_person",
-                &filter.generated_person,
-                &mut conditions,
-                &mut params,
-            );
-
-            (conditions.join(" AND "), params)
         };
 
-        // Helper: get distinct values + count for a column, scoped by all other active filters
+        add_in("country", &filter.country);
+        add_in("industry", &filter.industry);
+        add_in("niche", &filter.niche);
+        add_in("status", &filter.status);
+        add_in("priority", &filter.priority);
+        add_in("size", &filter.size);
+        add_in("title", &filter.title);
+        add_in("city", &filter.city);
+        add_in("state", &filter.state);
+        add_in("generated_person", &filter.generated_person);
+
+        let where_clause = conditions.join(" AND ");
+
+        // Total count
+        let total_sql = format!("SELECT COUNT(*) FROM leads WHERE {}", where_clause);
+        let mut total_stmt = self.conn.prepare(&total_sql).map_err(|e| e.to_string())?;
+        
+        let mut bind_params: Vec<Box<dyn duckdb::ToSql>> = vec![];
+        for p in &params {
+            bind_params.push(Box::new(p.clone()));
+        }
+        
+        let total_leads: i64 = total_stmt
+            .query_row(duckdb::params_from_iter(bind_params.iter()), |row| row.get(0))
+            .unwrap_or(0);
+
         let get_counts = |col: &str| -> Result<Vec<FilterOptionCount>, String> {
-            let (where_clause, params_vec) = build_conditions(Some(col));
             let sql = format!(
-            "SELECT {}, COUNT(*) FROM leads WHERE {} AND {} IS NOT NULL AND {} != '' GROUP BY {} ORDER BY COUNT(*) DESC",
-            col, where_clause, col, col, col
-        );
+                "SELECT CAST({} AS VARCHAR), COUNT(*) FROM leads WHERE {} AND {} IS NOT NULL AND {} != '' GROUP BY {} ORDER BY COUNT(*) DESC LIMIT 300",
+                col, where_clause, col, col, col
+            );
             let mut stmt = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
             let iter = stmt
-                .query_map(duckdb::params_from_iter(params_vec.iter()), |row| {
+                .query_map(duckdb::params_from_iter(bind_params.iter()), |row| {
                     Ok(FilterOptionCount {
                         value: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
                         count: row.get(1)?,
@@ -597,16 +591,6 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             }
             Ok(res)
         };
-
-        // Total count uses ALL active filters (no exclusion)
-        let (full_where, full_params) = build_conditions(None);
-        let total_sql = format!("SELECT COUNT(*) FROM leads WHERE {}", full_where);
-        let mut total_stmt = self.conn.prepare(&total_sql).map_err(|e| e.to_string())?;
-        let total_leads: i64 = total_stmt
-            .query_row(duckdb::params_from_iter(full_params.iter()), |row| {
-                row.get(0)
-            })
-            .unwrap_or(0);
 
         Ok(FilterCounts {
             total_leads,

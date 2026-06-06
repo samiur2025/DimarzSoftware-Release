@@ -109,6 +109,7 @@ const App: React.FC = () => {
   const [agency, setAgency] = useState<AgencyInfo>({ name: "Dimrz - Digital Marketing Zone", location: "Dhaka, Bangladesh", email: "contact@dimrz.com", website: "https://dimrz.com" });
   const [leadsFilters, setLeadsFilters] = useState<LeadsFilters>(defaultLeadsFilters);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [initProgress, setInitProgress] = useState("Initializing system...");
 
   const triggerRefresh = useCallback(() => {
     setRefreshTrigger(prev => prev + 1);
@@ -117,17 +118,22 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // In dev mode, bypass license check for easier development
-    if (import.meta.env.DEV) {
-      setIsActivated(true);
-    } else {
-      invoke<boolean>("check_license")
-        .then((isValid) => setIsActivated(isValid))
-        .catch((e) => {
-          console.error("License check error:", e);
+    let unlistenProgress: UnlistenFn | null = null;
+    listen<string>("init-progress", (event) => {
+      setInitProgress(event.payload);
+    }).then(un => unlistenProgress = un);
+
+    invoke("initialize_app")
+      .then(() => setIsActivated(true))
+      .catch((e) => {
+        console.error("App init error:", e);
+        if (e === "INVALID_LICENSE") {
           setIsActivated(false);
-        });
-    }
+        } else if (import.meta.env.DEV) {
+          // Dev mode fallback
+          setIsActivated(true);
+        }
+      });
 
     const storedAgency = localStorage.getItem("dimrz_settings_agency");
     if (storedAgency) {
@@ -139,6 +145,10 @@ const App: React.FC = () => {
     if (!hasAppLock) {
       setIsAuthenticated(true);
     }
+
+    return () => {
+      if (unlistenProgress) unlistenProgress();
+    };
   }, []);
 
   const showPage = useCallback((page: PageId) => {
@@ -186,14 +196,26 @@ const App: React.FC = () => {
   }, [showToast, triggerRefresh]);
 
   const handleActivated = () => {
-    setIsActivated(true);
-    showToast("License activated successfully", "success");
+    setIsActivated(null);
+    setInitProgress("Initializing database...");
+    
+    invoke("initialize_app")
+      .then(() => {
+        setIsActivated(true);
+        showToast("License activated successfully", "success");
+      })
+      .catch((e) => {
+        console.error("App init error after activation:", e);
+        setIsActivated(false);
+        showToast("Failed to initialize system after activation.", "error");
+      });
   };
 
   if (isActivated === null) {
     return (
-      <div className="activation-screen">
+      <div className="activation-screen" style={{ flexDirection: "column", gap: "1rem" }}>
         <div className="spinner" />
+        <p style={{ color: "#a1a1aa", fontSize: "0.9rem", marginTop: 10 }}>{initProgress}</p>
       </div>
     );
   }

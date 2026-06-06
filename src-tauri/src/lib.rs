@@ -2,12 +2,54 @@ use crate::database::Database;
 use crate::licensing::LicenseManager;
 use crate::state::AppState;
 use tauri::Manager;
+use tauri::Emitter;
 pub mod commands;
 pub mod database;
 pub mod licensing;
 pub mod models;
 pub mod security;
 pub mod state;
+#[tauri::command]
+async fn initialize_app(
+    window: tauri::Window,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    // Step 1: Check license in background
+    let license_valid = {
+        let license_manager = state.license.lock().await.clone();
+        tokio::task::spawn_blocking(move || license_manager.validate_local())
+            .await
+            .map_err(|e| e.to_string())??
+    };
+
+    if !license_valid {
+        return Err("INVALID_LICENSE".to_string());
+    }
+
+    window.emit("init-progress", "Loading database...").unwrap();
+
+    let app_dir = window
+        .app_handle()
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    
+    let db_path = app_dir.join("dimrz.duckdb");
+    let db_path_str = db_path.to_str().unwrap().to_string();
+
+    // Step 2: Initialize DuckDB in background
+    let db = tokio::task::spawn_blocking(move || {
+        Database::new(&db_path_str)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    *state.db.lock().await = Some(db);
+
+    window.emit("init-progress", "Ready").unwrap();
+    Ok("initialized".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -20,17 +62,15 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to get app data dir");
             std::fs::create_dir_all(&app_dir).ok();
-            let db_path = app_dir.join("dimrz.duckdb");
-            let db =
-                Database::new(db_path.to_str().unwrap()).expect("Failed to initialize database");
             let license = LicenseManager::new(app_dir.clone());
             app.manage(AppState {
-                db: std::sync::Arc::new(std::sync::Mutex::new(db)),
-                license: std::sync::Mutex::new(license),
+                db: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+                license: std::sync::Arc::new(tokio::sync::Mutex::new(license)),
             });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            initialize_app,
             commands::get_hardware_id,
             commands::activate_license,
             commands::check_license,

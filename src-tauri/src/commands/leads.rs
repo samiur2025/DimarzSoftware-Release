@@ -12,7 +12,9 @@ pub async fn import_leads_csv(
 ) -> Result<crate::models::ImportResult, String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        crate::database::Database::import_leads_csv(state.db.clone(), &file_path)
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
+        db.import_leads_csv(&file_path)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -26,7 +28,8 @@ pub async fn export_leads_csv(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.export_leads_csv(&file_path, filter)
     })
     .await
@@ -40,7 +43,8 @@ pub async fn audit_csv_cmd(
 ) -> Result<crate::models::AuditResult, String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.audit_csv(csv_path)
     })
     .await
@@ -57,7 +61,8 @@ pub async fn commit_csv_cmd(
 ) -> Result<crate::models::ImportResult, String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.commit_csv_fast(csv_path, rejected_rows, client_profile, workspace_node)
     })
     .await
@@ -71,7 +76,8 @@ pub async fn backup_database(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.backup_leads(&file_path)
     })
     .await
@@ -86,7 +92,8 @@ pub async fn restore_database(
 ) -> Result<i64, String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.restore_leads(&file_path, replace)
     })
     .await
@@ -103,8 +110,12 @@ pub async fn get_leads(
 ) -> Result<PaginatedLeads, String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.get_leads(filter)
+        let db_clone = {
+            let db_lock = state.db.blocking_lock();
+            let db = db_lock.as_ref().ok_or("Database not initialized")?;
+            db.try_clone()?
+        };
+        db_clone.get_leads(filter)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -117,8 +128,12 @@ pub async fn get_filter_counts(
 ) -> Result<crate::models::FilterCounts, String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.get_filter_counts(filter)
+        let db_clone = {
+            let db_lock = state.db.blocking_lock();
+            let db = db_lock.as_ref().ok_or("Database not initialized")?;
+            db.try_clone()?
+        };
+        db_clone.get_filter_counts(filter)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -128,7 +143,8 @@ pub async fn get_filter_counts(
 pub async fn delete_forever_cmd(ids: Vec<i64>, app_handle: tauri::AppHandle) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.delete_forever(ids)
     })
     .await
@@ -139,7 +155,8 @@ pub async fn delete_forever_cmd(ids: Vec<i64>, app_handle: tauri::AppHandle) -> 
 pub async fn optimize_db_cmd(app_handle: tauri::AppHandle) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.optimize_db()
     })
     .await
@@ -150,7 +167,8 @@ pub async fn optimize_db_cmd(app_handle: tauri::AppHandle) -> Result<(), String>
 pub async fn clear_all_leads_cmd(app_handle: tauri::AppHandle) -> Result<i64, String> {
     tokio::task::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
         db.clear_all_leads()
     })
     .await

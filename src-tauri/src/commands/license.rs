@@ -10,11 +10,11 @@ pub async fn activate_license(
     state: State<'_, AppState>,
 ) -> Result<crate::models::ActivationResponse, String> {
     let hardware_id = crate::licensing::hardware::HardwareFingerprint::generate()?;
-    let license = state.license.lock().map_err(|e| e.to_string())?.clone();
+    let license = state.license.lock().await.clone();
     license.activate_online(license_key, hardware_id).await
 }
 #[tauri::command]
 pub fn check_license(state: State<'_, AppState>) -> Result<bool, String> {
-    let license = state.license.lock().map_err(|e| e.to_string())?;
+    let license = state.license.blocking_lock();
     license.validate_local()
 }

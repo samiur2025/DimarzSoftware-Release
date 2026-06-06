@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { AppContext } from "../../App";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 
 // Safe wrapper for Tauri API calls to prevent crashes in regular browsers
@@ -110,6 +111,19 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
     stateRegion: '', city: '', industry: '', role: '', status: 'All Statuses', quantity: ''
   });
   const [exportColumns, setExportColumns] = useState<Set<string>>(new Set(exportAllColumns.map(c => c.id)));
+
+  const parentRef = useRef<HTMLDivElement>(null);
+  
+  const rowVirtualizer = useVirtualizer({
+    count: leads.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 53,
+    overscan: 10,
+  });
+
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom = virtualItems.length > 0 ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
 
   const handleOpenExportModal = () => {
     setExportFilters(prev => ({
@@ -333,9 +347,9 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
       </div>
 
       <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", borderLeft: "1px solid var(--border-color)", borderRight: "1px solid var(--border-color)" }}>
-        <div className="table-wrap">
+        <div className="table-wrap" ref={parentRef} style={{ overflow: "auto", flex: 1 }}>
           <table className="data-table" id="leadsTable">
-          <thead>
+          <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
             <tr>
               <th style={{ width: 40 }}><input type="checkbox" className="table-checkbox" checked={selectAll} onChange={toggleSelectAll} /></th>
               <th style={{ width: 40 }}>#</th>
@@ -362,8 +376,12 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
             </tr>
           </thead>
           <tbody>
-            {visibleLeads.map((lead, idx) => (
-              <tr key={lead.id}>
+            {paddingTop > 0 && <tr><td colSpan={22} style={{ height: paddingTop, padding: 0, border: 0 }}></td></tr>}
+            {virtualItems.map((virtualRow) => {
+              const idx = virtualRow.index;
+              const lead = visibleLeads[idx];
+              return (
+              <tr key={lead.id} ref={rowVirtualizer.measureElement} data-index={idx}>
                 <td><input type="checkbox" className="table-checkbox" checked={selected.has(lead.id)} onChange={() => toggleLead(lead.id)} /></td>
                 <td><span className="sl-number">{((page - 1) * pageSize + idx + 1).toString().padStart(2, "0")}</span></td>
                 <td>{lead.country}</td>
@@ -392,7 +410,9 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
+            {paddingBottom > 0 && <tr><td colSpan={22} style={{ height: paddingBottom, padding: 0, border: 0 }}></td></tr>}
           </tbody>
         </table>
       </div>

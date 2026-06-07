@@ -106,13 +106,25 @@ const cancelEdit = () => {
 };
 
 const deleteProject = (projectId: number) => {
-  if (confirm("Are you sure you want to delete this project?")) {
+  const proj = projects.find(p => p.id === projectId);
+  if (proj) {
+    if (proj.invoiced > 0 || proj.paid > 0 || (proj.assignments && proj.assignments.length > 0)) {
+      alert("⚠️ Action Blocked: This project contains financial data or team assignments. Deleting it will break team performance metrics. Please update the status to 'Cancelled' or 'On Hold' instead.");
+      return;
+    }
+  }
+  if (confirm("Are you sure you want to permanently delete this project?")) {
     setProjects(projects.filter(p => p.id !== projectId));
   }
 };
 
 const deleteClient = (clientId: number) => {
-  if (confirm("Are you sure you want to delete this client?")) {
+  const hasProjects = projects.some(p => p.client_id === clientId);
+  if (hasProjects) {
+    alert("⚠️ Action Blocked: This client has historical projects. Deleting them will corrupt financial records. Please edit the client and change their status to 'Inactive' instead.");
+    return;
+  }
+  if (confirm("Are you sure you want to permanently delete this client?")) {
     setClients(clients.filter(c => c.id !== clientId));
     if (selectedClient?.id === clientId) {
       setSelectedClient(null);
@@ -269,7 +281,7 @@ return (
 {/* Client Profile Modal */}
 {selectedClient && (
   <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, boxSizing: "border-box" }} onClick={() => setSelectedClient(null)}>
-    <div style={{ background: "var(--bg-panel)", borderRadius: 20, width: "100%", maxWidth: 960, maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border-color)", boxShadow: "0 24px 48px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+    <div style={{ background: "var(--bg-panel)", borderRadius: 20, width: "100%", maxWidth: 1024, maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border-color)", boxShadow: "0 24px 48px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
       
       {/* Header */}
       <div style={{ padding: 32, borderBottom: "1px solid var(--border-color)", display: "flex", gap: 24, alignItems: "flex-start", position: "relative" }}>
@@ -375,6 +387,33 @@ return (
 
         {/* Projects List Section */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {(() => {
+             const clientProjects = projects.filter(p => p.client_id === selectedClient.id);
+             const totalValue = clientProjects.reduce((s, p) => s + p.value, 0);
+             const totalInvoiced = clientProjects.reduce((s, p) => s + p.invoiced, 0);
+             const totalPaid = clientProjects.reduce((s, p) => s + p.paid, 0);
+             const totalDue = totalInvoiced - totalPaid;
+             return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 8 }}>
+                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--text-primary)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Project Value</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>{formatTaka(totalValue)}</div>
+                  </div>
+                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--info)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Invoiced</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--info)" }}>{formatTaka(totalInvoiced)}</div>
+                  </div>
+                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--success)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Paid</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--success)" }}>{formatTaka(totalPaid)}</div>
+                  </div>
+                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--danger)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Due</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--danger)" }}>{formatTaka(totalDue)}</div>
+                  </div>
+                </div>
+             );
+          })()}
           <div style={{ fontSize: 16, fontWeight: 700, borderBottom: "1px solid var(--border-color)", paddingBottom: 8 }}>Associated Projects</div>
           
           <div className="card" style={{ padding: 0, overflow: "hidden", border: "1px solid var(--border-color)" }}>

@@ -59,11 +59,11 @@ impl Database {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_deleted BOOLEAN DEFAULT false
             );
-            CREATE INDEX IF NOT EXISTS idx_leads_country ON leads(country);
-            CREATE INDEX IF NOT EXISTS idx_leads_industry ON leads(industry);
-            CREATE INDEX IF NOT EXISTS idx_leads_niche ON leads(niche);
-            CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
-            CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority);
+            DROP INDEX IF EXISTS idx_leads_country;
+            DROP INDEX IF EXISTS idx_leads_industry;
+            DROP INDEX IF EXISTS idx_leads_niche;
+            DROP INDEX IF EXISTS idx_leads_status;
+            DROP INDEX IF EXISTS idx_leads_priority;
             
             CREATE SEQUENCE IF NOT EXISTS clients_seq;
             CREATE TABLE IF NOT EXISTS clients (
@@ -1401,6 +1401,9 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
             .unwrap_or(0);
 
         self.conn.execute("DROP TABLE IF EXISTS _rej", []).ok();
+        
+        // Checkpoint the database to flush WAL to disk and free up the enormous temporary disk space
+        self.conn.execute("CHECKPOINT", []).ok();
 
         Ok(ImportResult {
             imported,

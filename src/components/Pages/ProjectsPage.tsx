@@ -10,6 +10,13 @@ export interface Assignment {
   deadline: string;
   leads: number;
   rate: number;
+  paid?: number;
+  payments?: {
+    id: number;
+    date: string;
+    amount: number;
+  }[];
+  is_revised?: boolean;
 }
 export interface Project {
 id: number;
@@ -45,7 +52,7 @@ const SAMPLE_CLIENT_MAP: Map<number, string> = new Map([
 ]);
 
 const ProjectsPage: React.FC<Props> = ({ className }) => {
-const { agency } = useContext(AppContext);
+const { agency, showToast, showPage } = useContext(AppContext);
 const shortName = agency.name.split(' - ')[0] || agency.name;
 
 const [projects, setProjects] = useState<Project[]>(() => {
@@ -55,6 +62,18 @@ const [projects, setProjects] = useState<Project[]>(() => {
 
 useEffect(() => {
   localStorage.setItem("dimrz_projects", JSON.stringify(projects));
+  
+  const handleOpenProject = (e: any) => {
+    const projectId = e.detail?.projectId;
+    if (projectId) {
+      const proj = projects.find(p => String(p.id) === String(projectId));
+      if (proj) {
+        setSelectedProject(proj);
+      }
+    }
+  };
+  window.addEventListener("open-project-view", handleOpenProject);
+  return () => window.removeEventListener("open-project-view", handleOpenProject);
 }, [projects]);
 
 const [clients] = useState<Map<number, string>>(() => {
@@ -82,6 +101,15 @@ const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 const [showForm, setShowForm] = useState(false);
 const [editDraft, setEditDraft] = useState<Project | null>(null);
 const [assignments, setAssignments] = useState<Assignment[]>([]);
+
+const [showFinancialModal, setShowFinancialModal] = useState(false);
+const [finMode, setFinMode] = useState<"invoice" | "payment">("invoice");
+const [invoiceAmount, setInvoiceAmount] = useState<number | "">("");
+const [paymentAmount, setPaymentAmount] = useState<number | "">("");
+const [paymentMethod, setPaymentMethod] = useState("Bank Transfer");
+
+const [payMemberAssignment, setPayMemberAssignment] = useState<Assignment | null>(null);
+const [teamPaymentAmount, setTeamPaymentAmount] = useState<number | "">("");
 
 const emptyProject: Project = { id: Date.now(), name: "", description: "", client_id: null, project_type: "Lead Generation", value: 0, invoiced: 0, paid: 0, status: "pending", deadline: "", progress: 0, working_sheet: "", shared_sheet: "", target_leads: 0, assignments: [] };
 
@@ -113,7 +141,16 @@ const handleAssignmentChange = (id: number, field: keyof Assignment, value: any)
       const member = teamMembers.find(m => m.id === value);
       return { ...a, member_id: value, member_name: member?.name || value };
     }
-    return { ...a, [field]: field === "leads" || field === "rate" ? Number(value) : value };
+    
+    const newValue = field === "leads" || field === "rate" ? Number(value) : value;
+    const isEditingFinancials = field === "leads" || field === "rate";
+    const becameRevised = isEditingFinancials && (a.paid || 0) > 0 && a[field] !== newValue;
+
+    return { 
+      ...a, 
+      [field]: newValue,
+      is_revised: a.is_revised || becameRevised 
+    };
   }));
 };
 
@@ -131,28 +168,103 @@ const handleSaveForm = () => {
   setEditDraft(null);
 };
 
-const handleIssueInvoice = () => {
+const openFinancialModal = (mode: "invoice" | "payment") => {
   if (!selectedProject) return;
-  const amount = parseFloat(prompt("Enter amount to invoice:") || "0");
-  if (!isNaN(amount) && amount > 0) {
-    const updated = { ...selectedProject, invoiced: selectedProject.invoiced + amount };
-    setProjects(projects.map(p => p.id === updated.id ? updated : p));
-    setSelectedProject(updated);
+  setFinMode(mode);
+  if (mode === "invoice") {
+    const uninvoiced = selectedProject.value - selectedProject.invoiced;
+    setInvoiceAmount(uninvoiced > 0 ? uninvoiced : 0);
+    setPaymentAmount("");
+  } else {
+    setInvoiceAmount(0);
+    const due = selectedProject.invoiced - selectedProject.paid;
+    setPaymentAmount(due > 0 ? due : 0);
+  }
+  setPaymentMethod("Bank Transfer");
+  setShowFinancialModal(true);
+};
+
+const handleConfirmFinancial = () => {
+  if (!selectedProject) return;
+  const invAmt = Number(invoiceAmount) || 0;
+  const payAmt = Number(paymentAmount) || 0;
+  
+  if (finMode === "invoice" && invAmt <= 0 && payAmt <= 0) {
+    if (showToast) showToast("Please enter a valid amount.", "error");
+    return;
+  }
+  if (finMode === "payment" && payAmt <= 0) {
+    if (showToast) showToast("Please enter a payment amount.", "error");
+    return;
+  }
+
+  const updated = { 
+    ...selectedProject, 
+    invoiced: finMode === "invoice" ? selectedProject.invoiced + invAmt : selectedProject.invoiced,
+    paid: selectedProject.paid + payAmt 
+  };
+
+  setProjects(projects.map(p => p.id === updated.id ? updated : p));
+  setSelectedProject(updated);
+  setShowFinancialModal(false);
+  if (showToast) {
+    if (finMode === "invoice") {
+      showToast(`Invoice generated ${payAmt > 0 ? 'and payment recorded' : ''} successfully.`, "success");
+    } else {
+      showToast("Payment recorded successfully.", "success");
+    }
   }
 };
 
-const handleRecordPayment = () => {
-  if (!selectedProject) return;
-  const amount = parseFloat(prompt("Enter payment received:") || "0");
-  if (!isNaN(amount) && amount > 0) {
-    const updated = { ...selectedProject, paid: selectedProject.paid + amount };
-    setProjects(projects.map(p => p.id === updated.id ? updated : p));
-    setSelectedProject(updated);
+const handleGeneratePayslip = (memberName: string) => {
+  if (showToast) showToast(`Payslip securely generated for ${memberName}.`, "success");
+};
+
+const handleConfirmTeamPayment = () => {
+  if (!selectedProject || !payMemberAssignment) return;
+  const amt = Number(teamPaymentAmount);
+  if (!amt || amt <= 0) {
+    if (showToast) showToast("Please enter a valid payment amount.", "error");
+    return;
   }
+
+  const updatedProjects = projects.map(p => {
+    if (p.id !== selectedProject.id) return p;
+    const updatedAssignments = p.assignments?.map(a => {
+      if (a.id !== payMemberAssignment.id) return a;
+      
+      const newPayment = {
+        id: Date.now(),
+        date: new Date().toISOString().split('T')[0],
+        amount: amt
+      };
+      
+      return {
+        ...a,
+        paid: (a.paid || 0) + amt,
+        payments: [...(a.payments || []), newPayment]
+      };
+    });
+    return { ...p, assignments: updatedAssignments };
+  });
+
+  setProjects(updatedProjects);
+  const updatedSelected = updatedProjects.find(p => p.id === selectedProject.id) || null;
+  setSelectedProject(updatedSelected);
+  setPayMemberAssignment(null);
+  setTeamPaymentAmount("");
+  if (showToast) showToast("Team payment recorded and Payslip ledger updated!", "success");
 };
 
 const handleDelete = (id: number) => {
-  if (confirm("Are you sure you want to delete this project?")) {
+  const proj = projects.find(p => p.id === id);
+  if (proj) {
+    if (proj.invoiced > 0 || proj.paid > 0 || (proj.assignments && proj.assignments.length > 0)) {
+      alert("⚠️ Action Blocked: This project contains financial data or team assignments. Deleting it will break team performance metrics. Please update the status to 'Cancelled' or 'On Hold' instead.");
+      return;
+    }
+  }
+  if (confirm("Are you sure you want to permanently delete this project?")) {
     setProjects(projects.filter(p => p.id !== id));
     if (selectedProject?.id === id) setSelectedProject(null);
   }
@@ -292,7 +404,7 @@ return (
 {/* Project View Modal */}
 {selectedProject && !showForm && (
   <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, boxSizing: "border-box" }} onClick={() => setSelectedProject(null)}>
-    <div style={{ background: "var(--bg-panel)", borderRadius: 20, width: "100%", maxWidth: 800, maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border-color)", boxShadow: "0 24px 48px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+    <div style={{ background: "var(--bg-panel)", borderRadius: 20, width: "100%", maxWidth: 1024, maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border-color)", boxShadow: "0 24px 48px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
       
       <div style={{ padding: 32, borderBottom: "1px solid var(--border-color)", display: "flex", gap: 24, alignItems: "flex-start", position: "relative", background: "var(--bg-secondary)" }}>
         <button onClick={() => setSelectedProject(null)} style={{ position: "absolute", top: 20, right: 20, width: 32, height: 32, borderRadius: 8, background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
@@ -313,69 +425,146 @@ return (
       </div>
 
       <div style={{ padding: 32, display: "flex", flexDirection: "column", gap: 32 }}>
-        {(selectedProject.description || selectedProject.working_sheet || selectedProject.shared_sheet) && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {selectedProject.description && (
+        
+        {/* Top Information Row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          {/* Strategic Info */}
+          <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>📅 Strategic Details</div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Description</div>
-                <div style={{ fontSize: 14, color: "var(--text-primary)", lineHeight: 1.5 }}>{selectedProject.description}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Deadline</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{selectedProject.deadline || "Not Set"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Target Leads</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{selectedProject.target_leads?.toLocaleString() || "Not Set"}</div>
+              </div>
+            </div>
+
+            {selectedProject.description && (
+              <div style={{ marginTop: 8, paddingTop: 16, borderTop: "1px solid var(--border-color)" }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Description</div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>{selectedProject.description}</div>
               </div>
             )}
             
             {(selectedProject.working_sheet || selectedProject.shared_sheet) && (
-              <div style={{ display: "flex", gap: 16 }}>
+              <div style={{ display: "flex", gap: 12, marginTop: "auto", paddingTop: 16 }}>
                 {selectedProject.working_sheet && (
-                  <a href={selectedProject.working_sheet} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none" }}>
+                  <a href={selectedProject.working_sheet} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 8, padding: "8px", fontSize: 12, textDecoration: "none" }}>
                     <span>📊</span> Working Sheet
                   </a>
                 )}
                 {selectedProject.shared_sheet && (
-                  <a href={selectedProject.shared_sheet} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none" }}>
-                    <span>🔗</span> Shared with Client
+                  <a href={selectedProject.shared_sheet} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 8, padding: "8px", fontSize: 12, textDecoration: "none" }}>
+                    <span>🔗</span> Client Sheet
                   </a>
                 )}
               </div>
             )}
           </div>
-        )}
-        
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-          {/* Strategic Info */}
-          <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>📅 Timeline & Progress</div>
-            <div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Deadline</div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{selectedProject.deadline || "—"}</div>
-            </div>
-          </div>
           
-          {/* Financials & Operations */}
+          {/* Client Financials Hub */}
           <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>💰 Financials</span>
+              <span>💼 Client Financials Hub</span>
               <span style={{ color: "var(--text-primary)", fontSize: 14 }}>Total: {formatTaka(selectedProject.value)}</span>
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div style={{ padding: 12, background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(59,130,246,0.2)" }}>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>Invoiced</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--info)" }}>{formatTaka(selectedProject.invoiced)}</div>
-                <button onClick={handleIssueInvoice} style={{ marginTop: 8, width: "100%", padding: "4px 0", fontSize: 11, background: "var(--info)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Issue Invoice</button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, flex: 1 }}>
+              <div style={{ padding: 16, background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(59,130,246,0.2)", display: "flex", flexDirection: "column" }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Invoiced Amount</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "var(--info)", marginBottom: 12 }}>{formatTaka(selectedProject.invoiced)}</div>
+                <button onClick={() => openFinancialModal("invoice")} style={{ marginTop: "auto", width: "100%", padding: "8px 0", fontSize: 12, fontWeight: 600, background: "var(--info)", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", transition: "0.2s" }}>🧾 Issue Invoice</button>
               </div>
               
-              <div style={{ padding: 12, background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(34,197,94,0.2)" }}>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>Paid</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--success)" }}>{formatTaka(selectedProject.paid)}</div>
-                <button onClick={handleRecordPayment} style={{ marginTop: 8, width: "100%", padding: "4px 0", fontSize: 11, background: "var(--success)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Record Payment</button>
+              <div style={{ padding: 16, background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(34,197,94,0.2)", display: "flex", flexDirection: "column" }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Paid Amount</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "var(--success)", marginBottom: 12 }}>{formatTaka(selectedProject.paid)}</div>
+                <button onClick={() => openFinancialModal("payment")} disabled={selectedProject.invoiced === 0} style={{ marginTop: "auto", width: "100%", padding: "8px 0", fontSize: 12, fontWeight: 600, background: selectedProject.invoiced === 0 ? "rgba(34,197,94,0.4)" : "var(--success)", color: "#fff", border: "none", borderRadius: 6, cursor: selectedProject.invoiced === 0 ? "not-allowed" : "pointer", transition: "0.2s" }} title={selectedProject.invoiced === 0 ? "Cannot record payment before issuing an invoice" : ""}>💵 Record Payment</button>
               </div>
             </div>
             
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(239,68,68,0.05)", borderRadius: 8, border: "1px solid rgba(239,68,68,0.2)" }}>
-              <span style={{ fontSize: 11, color: "var(--danger)", fontWeight: 600 }}>Balance Due</span>
-              <span style={{ fontSize: 14, color: "var(--danger)", fontWeight: 700 }}>{formatTaka(selectedProject.invoiced - selectedProject.paid)}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "rgba(239,68,68,0.05)", borderRadius: 8, border: "1px solid rgba(239,68,68,0.2)" }}>
+              <span style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Balance Due</span>
+              <span style={{ fontSize: 16, color: "var(--danger)", fontWeight: 800 }}>{formatTaka(selectedProject.invoiced - selectedProject.paid)}</span>
             </div>
           </div>
         </div>
+
+        {/* Team Deployment & Payroll Station */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, borderBottom: "1px solid var(--border-color)", paddingBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Team Deployment & Payroll Station</span>
+            <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
+              Total Deployment Cost: <strong style={{ color: "var(--text-primary)" }}>{formatTaka(selectedProject.assignments?.reduce((sum, a) => sum + (a.leads * a.rate), 0) || 0)}</strong>
+            </span>
+          </div>
+          
+          <div className="card" style={{ padding: 0, overflow: "hidden", border: "1px solid var(--border-color)" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table className="data-table" style={{ fontSize: 12, width: "100%", margin: 0 }}>
+                <thead style={{ background: "var(--bg-secondary)" }}>
+                  <tr>
+                    <th>Assigned Member</th>
+                    <th style={{ textAlign: "right" }}>Target Leads</th>
+                    <th style={{ textAlign: "right" }}>Rate / Lead</th>
+                    <th style={{ textAlign: "right" }}>Total Cost</th>
+                    <th style={{ textAlign: "right" }}>Paid</th>
+                    <th style={{ textAlign: "right" }}>Due</th>
+                    <th style={{ textAlign: "center", width: 140 }}>Payroll Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedProject.assignments && selectedProject.assignments.length > 0 ? selectedProject.assignments.map(a => {
+                    const cost = a.leads * a.rate;
+                    const paid = a.paid || 0;
+                    const due = cost - paid;
+                    return (
+                      <tr key={a.id}>
+                        <td style={{ fontWeight: 600 }}>
+                          <span 
+                            onClick={() => {
+                              showPage("myTeam");
+                              setTimeout(() => {
+                                window.dispatchEvent(new CustomEvent("open-member-profile", { detail: { memberId: a.member_id } }));
+                              }, 100);
+                            }}
+                            style={{ color: "var(--info)", cursor: "pointer", textDecoration: "underline" }}
+                            title="View Member Profile"
+                          >
+                            {a.member_name}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>{a.leads.toLocaleString()}</td>
+                        <td style={{ textAlign: "right" }}>{formatTaka(a.rate)}</td>
+                        <td style={{ textAlign: "right", fontWeight: 700, color: "var(--text-primary)" }}>{formatTaka(cost)}</td>
+                        <td style={{ textAlign: "right", fontWeight: 600, color: "var(--success)" }}>{formatTaka(paid)}</td>
+                        <td style={{ textAlign: "right", fontWeight: 600, color: due > 0 ? "var(--danger)" : "var(--text-muted)" }}>{formatTaka(due)}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <button onClick={() => { setPayMemberAssignment(a); setTeamPaymentAmount(due > 0 ? due : 0); }} disabled={due <= 0} style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, background: due <= 0 ? "rgba(34,197,94,0.4)" : "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 6, color: due <= 0 ? "#fff" : "var(--success)", cursor: due <= 0 ? "not-allowed" : "pointer", transition: "0.2s", width: "100%" }} title={due <= 0 ? "Fully Paid" : "Pay Member"}>
+                            {due <= 0 ? "✅ Fully Paid" : "💸 Pay Member"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+                        <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.5 }}>👥</div>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>No team members assigned</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>Click Edit to assign staff to this project.</div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -537,6 +726,164 @@ return (
     </div>
   </div>
 )}
+
+{/* Financial Modal Overlay */}
+{showFinancialModal && selectedProject && (
+  <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, boxSizing: "border-box" }}>
+    <div style={{ background: "var(--bg-secondary)", borderRadius: 16, width: "100%", maxWidth: 600, overflow: "hidden", border: "1px solid var(--border-color)", boxShadow: "0 32px 64px rgba(0,0,0,0.6)", display: "flex", flexDirection: "column" }}>
+      
+      {/* Header */}
+      <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-primary)" }}>
+        <div style={{ fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: finMode === "invoice" ? "rgba(59,130,246,0.1)" : "rgba(34,197,94,0.1)", color: finMode === "invoice" ? "var(--info)" : "var(--success)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+            {finMode === "invoice" ? "🧾" : "💵"}
+          </div>
+          {finMode === "invoice" ? "Issue Invoice & Payment" : "Record Payment"}
+        </div>
+        <button onClick={() => setShowFinancialModal(false)} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✕</button>
+      </div>
+
+      <div style={{ padding: 24 }}>
+        {/* Dynamic Client Context */}
+        <div style={{ background: "var(--bg-panel)", padding: 16, borderRadius: 10, border: "1px solid var(--border-color)", marginBottom: 24, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Bill To</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>{clients.get(selectedProject.client_id || 0) || "Unknown Company"}</div>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>Project: {selectedProject.name}</div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {finMode === "invoice" && (
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Invoice Amount (৳)</label>
+              <input type="number" value={invoiceAmount} onChange={e => setInvoiceAmount(e.target.value === "" ? "" : Number(e.target.value))} placeholder="0.00" style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--border-color)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: 16, outline: "none", fontWeight: 600 }} autoFocus />
+            </div>
+          )}
+
+          <div>
+            <label style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>
+              <span>{finMode === "invoice" ? "Immediate Payment (Optional ৳)" : "Payment Amount (৳)"}</span>
+              {finMode === "payment" && <span style={{ color: "var(--danger)" }}>Due: {formatTaka(selectedProject.invoiced - selectedProject.paid)}</span>}
+            </label>
+            <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value === "" ? "" : Number(e.target.value))} placeholder="0.00" style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--border-color)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: 16, outline: "none", fontWeight: 600 }} />
+            
+            {/* Quick Selectors */}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button onClick={() => setPaymentAmount(finMode === "invoice" ? (Number(invoiceAmount) || 0) : (selectedProject.invoiced - selectedProject.paid))} style={{ flex: 1, padding: "6px", fontSize: 11, fontWeight: 600, background: "var(--bg-panel)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-secondary)", cursor: "pointer", transition: "0.2s" }}>Full Amount</button>
+              <button onClick={() => setPaymentAmount((finMode === "invoice" ? (Number(invoiceAmount) || 0) : (selectedProject.invoiced - selectedProject.paid)) / 2)} style={{ flex: 1, padding: "6px", fontSize: 11, fontWeight: 600, background: "var(--bg-panel)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-secondary)", cursor: "pointer", transition: "0.2s" }}>50% Partial</button>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Payment Method</label>
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--border-color)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: 14, outline: "none" }}>
+              <option>Bank Transfer</option>
+              <option>PayPal</option>
+              <option>Payoneer</option>
+              <option>Wise</option>
+              <option>Crypto (USDT/BTC)</option>
+              <option>Cash</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Calculation */}
+      <div style={{ padding: "20px 24px", background: "var(--bg-primary)", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>New Balance Due</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)" }}>
+            {formatTaka(
+              (selectedProject.invoiced + (finMode === "invoice" ? (Number(invoiceAmount) || 0) : 0)) -
+              (selectedProject.paid + (Number(paymentAmount) || 0))
+            )}
+          </div>
+        </div>
+        <button onClick={handleConfirmFinancial} className="btn btn-primary" style={{ padding: "10px 24px", fontSize: 14, fontWeight: 600 }}>
+          {finMode === "invoice" ? "✓ Generate Invoice" : "✓ Record Payment"}
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
+{/* Team Payroll Modal */}
+{payMemberAssignment && selectedProject && (() => {
+  const cost = payMemberAssignment.leads * payMemberAssignment.rate;
+  const paid = payMemberAssignment.paid || 0;
+  const due = cost - paid;
+  
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, boxSizing: "border-box" }}>
+      <div style={{ background: "var(--bg-secondary)", borderRadius: 16, width: "100%", maxWidth: 600, overflow: "hidden", border: "1px solid var(--border-color)", boxShadow: "0 32px 64px rgba(0,0,0,0.6)", display: "flex", flexDirection: "column" }}>
+        
+        {/* Header */}
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-primary)" }}>
+          <div style={{ fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(34,197,94,0.1)", color: "var(--success)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+              💸
+            </div>
+            Team Payroll Station
+          </div>
+          <button onClick={() => setPayMemberAssignment(null)} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--bg-hover)", border: "1px solid var(--border-color)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✕</button>
+        </div>
+
+        <div style={{ padding: 24 }}>
+          {/* Context */}
+          <div style={{ background: "var(--bg-panel)", padding: 16, borderRadius: 10, border: "1px solid var(--border-color)", marginBottom: 24, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Paying Member</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>{payMemberAssignment.member_name}</div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>Project: {selectedProject.name}</div>
+            
+            <div style={{ display: "flex", gap: 24, marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--border-color)" }}>
+              <div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>Total Cost</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{formatTaka(cost)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>Already Paid</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--success)" }}>{formatTaka(paid)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>Current Due</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)" }}>{formatTaka(due)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <label style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>
+                <span>Payment Amount (৳)</span>
+              </label>
+              <input type="number" value={teamPaymentAmount} onChange={e => setTeamPaymentAmount(e.target.value === "" ? "" : Number(e.target.value))} placeholder="0.00" style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--border-color)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: 16, outline: "none", fontWeight: 600 }} autoFocus />
+              
+              {/* Quick Selectors */}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={() => setTeamPaymentAmount(due)} style={{ flex: 1, padding: "6px", fontSize: 11, fontWeight: 600, background: "var(--bg-panel)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-secondary)", cursor: "pointer", transition: "0.2s" }}>Full Amount</button>
+                <button onClick={() => setTeamPaymentAmount(due / 2)} style={{ flex: 1, padding: "6px", fontSize: 11, fontWeight: 600, background: "var(--bg-panel)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-secondary)", cursor: "pointer", transition: "0.2s" }}>50% Partial</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Calculation */}
+        <div style={{ padding: "20px 24px", background: "var(--bg-primary)", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Remaining Due</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)" }}>
+              {formatTaka(Math.max(0, due - (Number(teamPaymentAmount) || 0)))}
+            </div>
+          </div>
+          <button onClick={handleConfirmTeamPayment} className="btn btn-primary" style={{ padding: "10px 24px", fontSize: 14, fontWeight: 600 }}>
+            ✓ Record Payment & Generate Slip
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+})()}
 
 </div>
 );

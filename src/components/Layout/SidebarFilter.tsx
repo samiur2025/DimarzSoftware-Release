@@ -98,9 +98,63 @@ const SidebarFilter: React.FC<Props> = ({ visible, mobileOpen }) => {
       count: formatCount(item.count)
     }));
 
+  const hasActiveFilters = Boolean(
+    (leadsFilters.search && leadsFilters.search !== "") || 
+    (leadsFilters.countries && leadsFilters.countries.length > 0) ||
+    (leadsFilters.industries && leadsFilters.industries.length > 0) ||
+    (leadsFilters.niches && leadsFilters.niches.length > 0) ||
+    (leadsFilters.sizes && leadsFilters.sizes.length > 0) ||
+    (leadsFilters.titles && leadsFilters.titles.length > 0) ||
+    (leadsFilters.cities && leadsFilters.cities.length > 0) ||
+    (leadsFilters.states && leadsFilters.states.length > 0) ||
+    (leadsFilters.generated && leadsFilters.generated.length > 0)
+  );
+
+  const clearAllFilters = () => {
+    setLeadsFilters(prev => ({
+      ...prev,
+      search: "",
+      countries: [],
+      industries: [],
+      niches: [],
+      sizes: [],
+      titles: [],
+      cities: [],
+      states: [],
+      generated: []
+    }));
+    setOpenGroup(null);
+  };
+
   return (
     <aside className={`sidebar-filter ${mobileOpen ? "open" : ""}`} id="sidebarFilter" style={{ display: "flex", width: 260 }}>
       <div className="sidebar-filter-header">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '0 2px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filters & Search</span>
+          <button 
+            onClick={clearAllFilters}
+            disabled={!hasActiveFilters}
+            style={{ 
+              background: hasActiveFilters ? 'linear-gradient(135deg, #2D9596 0%, #1E6667 100%)' : 'var(--bg-secondary)', 
+              color: hasActiveFilters ? 'white' : 'var(--text-muted)', 
+              border: hasActiveFilters ? '1px solid rgba(45, 149, 150, 0.3)' : 'none', 
+              padding: '4px 10px', 
+              borderRadius: '6px', 
+              fontSize: '11px', 
+              fontWeight: 600, 
+              cursor: hasActiveFilters ? 'pointer' : 'default',
+              opacity: hasActiveFilters ? 1 : 0.6,
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="Clear all active filters"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+            Reset All
+          </button>
+        </div>
         <div className="search-box">
           <span className="search-icon">{isFetching ? <div className="spinner" style={{width: 14, height: 14, borderWidth: 2, marginRight: 6}} /> : "🔍"}</span>
           <input type="text" placeholder="Search leads, companies, persons..." id="sidebarSearch"

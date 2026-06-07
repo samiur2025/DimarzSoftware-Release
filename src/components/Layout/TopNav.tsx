@@ -56,8 +56,8 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
 { id: "leads", label: "Leads", icon: <Icon path={icons.leads} /> },
 { id: "clients", label: "Clients", icon: <Icon path={icons.clients} /> },
 { id: "projects", label: "Projects", icon: <Icon path={icons.projects} /> },
-{ id: "team", label: "Onboarding", icon: <Icon path={icons.team} /> },
 { id: "myTeam", label: "My Team", icon: <Icon path={icons.myTeam} /> },
+{ id: "team", label: "Onboarding", icon: <Icon path={icons.team} /> },
 ];
 const dropdownItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
 { id: "validator", label: "Lead Validator", icon: <Icon path={icons.validator} /> },

@@ -22,9 +22,10 @@ import SettingsPage from "./components/Pages/SettingsPage";
 import AdminPage from "./components/Pages/AdminPage";
 import PlaceholderPage from "./components/Pages/PlaceholderPage";
 import BackupPage from "./components/Pages/BackupPage";
+import InvoicesPage from "./components/Pages/InvoicesPage";
 
 export type PageId =
-  | "leads" | "clients" | "projects"
+  | "leads" | "clients" | "projects" | "invoices"
   | "team" | "myTeam" | "import" | "validator" | "leadSummary" | "mailServer"
   | "admin" | "gformScript" | "settings" | "backup";
 
@@ -124,14 +125,19 @@ const App: React.FC = () => {
     }).then(un => unlistenProgress = un);
 
     invoke("initialize_app")
-      .then(() => setIsActivated(true))
+      .then(() => {
+        setIsActivated(true);
+        setTimeout(() => invoke("close_splashscreen"), 500); // 500ms delay for smooth transition
+      })
       .catch((e) => {
         console.error("App init error:", e);
         if (e === "INVALID_LICENSE") {
           setIsActivated(false);
+          invoke("close_splashscreen");
         } else if (import.meta.env.DEV) {
           // Dev mode fallback
           setIsActivated(true);
+          invoke("close_splashscreen");
         }
       });
 
@@ -259,6 +265,7 @@ const App: React.FC = () => {
 
           <ClientsPage className={currentPage === "clients" ? "page-block active" : "page-block"} />
           <ProjectsPage className={currentPage === "projects" ? "page-block active" : "page-block"} />
+          <InvoicesPage className={currentPage === "invoices" ? "page-block active" : "page-block"} />
           <TeamPage className={currentPage === "team" ? "page-block active" : "page-block"} />
           <MyTeamPage className={currentPage === "myTeam" ? "page-block active" : "page-block"} />
           <ImportPage className={currentPage === "import" ? "page-block active" : "page-block"} />

@@ -3,6 +3,7 @@ import { AppContext } from "../../App";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useDebouncedCallback } from "use-debounce";
 
 
 // Safe wrapper for Tauri API calls to prevent crashes in regular browsers
@@ -94,12 +95,26 @@ const exportAllColumns = [
 ];
 
 const LeadsPage: React.FC<Props> = ({ className }) => {
-  const { showToast, showPage, leadsFilters, refreshTrigger, triggerRefresh } = useContext(AppContext);
+  const { showToast, showPage, leadsFilters, setLeadsFilters, refreshTrigger, triggerRefresh } = useContext(AppContext);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [totalLeads, setTotalLeads] = useState(0);
   const [dbTotal, setDbTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [localSearch, setLocalSearch] = useState(leadsFilters.search || "");
+
+  useEffect(() => {
+    setLocalSearch(leadsFilters.search || "");
+  }, [leadsFilters.search]);
+
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    setLeadsFilters(prev => ({ ...prev, search: value, page: 1 })); // Reset to page 1 on new search
+  }, 500);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalSearch(e.target.value);
+    debouncedSearch(e.target.value);
+  };
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -347,6 +362,20 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
       </div>
 
       <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", borderLeft: "1px solid var(--border-color)", borderRight: "1px solid var(--border-color)" }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div className="search-box" style={{ position: "relative", width: 320 }}>
+            <span className="search-icon" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>
+              {loading ? <div className="spinner" style={{width: 14, height: 14, borderWidth: 2}} /> : "🔍"}
+            </span>
+            <input type="text" placeholder="Search leads, companies, persons..." id="mainSearch"
+              value={localSearch}
+              onChange={handleSearchChange} 
+              style={{ width: "100%", padding: "8px 12px 8px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setLeadsFilters(prev => ({...prev, search: ""}))} style={{ fontSize: 12, padding: "6px 12px" }}><span>↺</span> Reset Search</button>
+          </div>
+        </div>
         <div className="table-wrap" ref={parentRef} style={{ overflow: "auto", flex: 1 }}>
           <table className="data-table" id="leadsTable">
           <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>

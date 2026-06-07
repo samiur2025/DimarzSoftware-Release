@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-shell";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { save } from "@tauri-apps/plugin-dialog";
 import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 
 interface Props {
   className: string;
@@ -28,7 +28,7 @@ export interface TeamMember {
 const MY_TEAM_STORAGE_KEY = "dimrz_my_team";
 
 const MyTeamPage: React.FC<Props> = ({ className }) => {
-  const { showPage, showToast } = useContext(AppContext);
+  const { showPage, showToast, triggerRefresh } = useContext(AppContext);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [projects] = useState<Project[]>(() => {
     const saved = localStorage.getItem("dimrz_projects");
@@ -45,6 +45,9 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
   
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   const [selectedPayslip, setSelectedPayslip] = useState<any>(null);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   const openModal = (m: TeamMember) => {
     setSelectedMember(m);
@@ -133,8 +136,22 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
         }
       }
     };
+    const handleOpenPayslip = (e: any) => {
+      const slip = e.detail?.slip;
+      if (slip && slip.member) {
+        showPage("myTeam");
+        setSelectedMember(slip.member);
+        setTimeout(() => {
+          setSelectedPayslip(slip);
+        }, 100);
+      }
+    };
     window.addEventListener("open-member-profile", handleOpenProfile);
-    return () => window.removeEventListener("open-member-profile", handleOpenProfile);
+    window.addEventListener("open-payslip-modal", handleOpenPayslip);
+    return () => {
+      window.removeEventListener("open-member-profile", handleOpenProfile);
+      window.removeEventListener("open-payslip-modal", handleOpenPayslip);
+    };
   }, [members]);
 
   const loadFromStorage = () => {
@@ -154,6 +171,7 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
   const persistMembers = (updated: TeamMember[]) => {
     localStorage.setItem(MY_TEAM_STORAGE_KEY, JSON.stringify(updated));
     setMembers(updated);
+    triggerRefresh();
   };
 
   const filtered = members.filter(m => {
@@ -165,6 +183,100 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
       m.category.toLowerCase().includes(q));
   });
 
+  let totalPaid = 0;
+  let totalDue = 0;
+
+  filtered.forEach(m => {
+    const teamProjects = projects.filter(p => p.assignments?.some(a => String(a.member_id) === String(m.id)));
+    let mCost = 0;
+    let mPaid = 0;
+    teamProjects.forEach(p => {
+      const assignment = p.assignments?.find(a => String(a.member_id) === String(m.id));
+      if (assignment) {
+        mCost += p.project_type === "Lead Generation" ? assignment.leads * assignment.rate : assignment.rate;
+        if (assignment.payments) {
+          assignment.payments.forEach(pay => {
+            mPaid += pay.amount;
+          });
+        }
+      }
+    });
+    totalPaid += mPaid;
+    totalDue += Math.max(0, mCost - mPaid);
+  });
+
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map(m => String(m.id))));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  const toggleMember = (id: string) => {
+    const next = new Set(selected);
+    const sid = String(id);
+    if (next.has(sid)) next.delete(sid);
+    else next.add(sid);
+    setSelected(next);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selected.size === 0) return;
+    const membersToDelete = members.filter(m => selected.has(String(m.id)));
+    
+    const hasAssignedProjects = membersToDelete.some(m => projects.some(p => p.assignments?.some(a => String(a.member_id) === String(m.id))));
+    if (hasAssignedProjects) {
+      if (confirm("⚠️ One or more selected members are assigned to active projects. Would you like to Archive them instead so their calculations are saved?")) {
+        const updated = members.map(m => selected.has(String(m.id)) ? { ...m, status: "archived" } : m);
+        persistMembers(updated);
+        showToast("Selected members have been archived.", "success");
+        setSelected(new Set());
+        setSelectAll(false);
+      }
+      return;
+    }
+
+    if (confirm(`Are you sure you want to permanently delete ${selected.size} member(s)?`)) {
+      persistMembers(members.filter(m => !selected.has(String(m.id))));
+      if (selectedMember && selected.has(String(selectedMember.id))) {
+        setSelectedMember(null);
+      }
+      setSelected(new Set());
+      setSelectAll(false);
+      showToast("Members permanently removed.", "info");
+    }
+  };
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      alert("No data to export");
+      return;
+    }
+    
+    const targetMembers = selected.size > 0 ? members.filter(m => selected.has(String(m.id))) : filtered;
+    
+    const headers = ["Name", "Email", "Phone", "WhatsApp", "LinkedIn", "Role", "Location", "Status", "Hired On"];
+    const rows = targetMembers.map(m => [
+      m.name, m.email, m.phone, m.whatsapp, m.linkedin, m.category, m.address, m.status, m.submitted_date
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(e => e.map(field => `"${String(field || "").replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "dimrz_team_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const formatTaka = (n: number | string) => {
     const num = Number(n);
     if (isNaN(num)) return "৳0.00";
@@ -175,67 +287,97 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
     <div className={className} id="myTeamPage" style={{ padding: 0, overflow: "hidden", flexDirection: "column" }}>
       <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
 
+        {/* ── Stats Cards ── */}
+        <div className="leads-stat-cards">
+          <div className="leads-stat-card leads-stat-card--dark">
+            <div className="lsc-number">{filtered.length.toLocaleString()}</div>
+            <div className="lsc-label">TOTAL MEMBERS</div>
+          </div>
+          <div className="leads-stat-card leads-stat-card--blue">
+            <div className="lsc-number">{formatTaka(totalPaid)}</div>
+            <div className="lsc-label">TOTAL TEAM PAYMENT</div>
+          </div>
+          <div className="leads-stat-card leads-stat-card--orange">
+            <div className="lsc-number">{formatTaka(totalDue)}</div>
+            <div className="lsc-label">TOTAL TEAM DUE</div>
+          </div>
+        </div>
+
         {/* Header */}
-        <div className="content-header" style={{ paddingLeft: 0, paddingRight: 0 }}>
+        <div className="content-header">
           <div className="header-left">
-            <div>
-              <div className="page-title" style={{ fontSize: 22, fontStyle: "italic", fontWeight: 800, letterSpacing: "-0.5px" }}>MY TEAM</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                Manage your hired and active team members.
-              </div>
-            </div>
+            <h1 className="page-title">My Team</h1>
+            <span className="total-count">Total: <strong>{filtered.length.toLocaleString()}</strong> members {selected.size > 0 && `| ${selected.size} selected`}</span>
           </div>
           <div className="header-actions" style={{ display: "flex", gap: 12 }}>
-            <div style={{ display: "flex", background: "var(--bg-input)", borderRadius: 8, padding: 4, border: "1px solid var(--border-color)" }}>
-              <button onClick={() => setViewMode("active")} style={{ padding: "8px 24px", minWidth: 120, background: viewMode === "active" ? "var(--bg-panel)" : "transparent", color: viewMode === "active" ? "var(--text-primary)" : "var(--text-muted)", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: viewMode === "active" ? "0 2px 4px rgba(0,0,0,0.1)" : "none" }}>👥 Active</button>
-              <button onClick={() => setViewMode("archived")} style={{ padding: "8px 24px", minWidth: 120, background: viewMode === "archived" ? "var(--bg-panel)" : "transparent", color: viewMode === "archived" ? "var(--text-primary)" : "var(--text-muted)", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: viewMode === "archived" ? "0 2px 4px rgba(0,0,0,0.1)" : "none" }}>🗄️ Archived</button>
+            <div style={{ display: "flex", background: "var(--bg-input)", borderRadius: 8, padding: "3px", border: "1px solid var(--border-color)", alignItems: "center" }}>
+              <button onClick={() => setViewMode("active")} style={{ padding: "5px 14px", background: viewMode === "active" ? "var(--bg-panel)" : "transparent", color: viewMode === "active" ? "var(--text-primary)" : "var(--text-muted)", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: viewMode === "active" ? "0 2px 4px rgba(0,0,0,0.1)" : "none", lineHeight: "1.5" }}>👥 Active</button>
+              <button onClick={() => setViewMode("archived")} style={{ padding: "5px 14px", background: viewMode === "archived" ? "var(--bg-panel)" : "transparent", color: viewMode === "archived" ? "var(--text-primary)" : "var(--text-muted)", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: viewMode === "archived" ? "0 2px 4px rgba(0,0,0,0.1)" : "none", lineHeight: "1.5" }}>🗄️ Archived</button>
             </div>
+
+            <button className="btn btn-secondary" onClick={toggleSelectAll}>
+              <span>{selected.size > 0 ? "✕" : "☐"}</span> {selected.size > 0 ? "Clear Selection" : "Select All"}
+            </button>
+            <button className="btn btn-danger" onClick={handleDeleteSelected} disabled={selected.size === 0}>
+              <span>🗑</span> Delete
+            </button>
+            <button className="btn btn-secondary" onClick={handleExport} disabled={filtered.length === 0}>
+              <span>📥</span> Export CSV
+            </button>
             <button className="btn btn-primary" onClick={() => { setDraftMember({}); setShowManualForm(true); }} style={{ background: "linear-gradient(135deg, #3db87a, #2a8758)", borderColor: "rgba(61,184,122,0.3)" }}>
               <span>➕</span> Add Team Member
             </button>
           </div>
         </div>
 
+      </div>
+
+      {/* Card with Search, Table, and Pagination */}
+      <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", borderLeft: "1px solid var(--border-color)", borderRight: "1px solid var(--border-color)", margin: "0 24px 24px" }}>
+        
         {/* Search */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-          <div className="search-box" style={{ position: "relative", flex: 1, maxWidth: 500 }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div className="search-box" style={{ position: "relative", width: 320 }}>
             <span className="search-icon" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>🔍</span>
             <input
               type="text"
               placeholder="Search team members by name, email, or role..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: "100%", padding: "10px 12px 10px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 14, outline: "none" }}
+              style={{ width: "100%", padding: "8px 12px 8px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, outline: "none" }}
             />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setSearch("")} style={{ fontSize: 12, padding: "6px 12px" }}><span>↺</span> Reset Search</button>
           </div>
         </div>
 
-      </div>
-
-      {/* Scrollable Table Area */}
-      <div style={{ padding: "0 24px 24px", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-          <div style={{ flex: 1, overflow: "auto" }}>
-            <table className="data-table" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}>#</th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>WhatsApp</th>
-                  <th>LinkedIn</th>
-                  <th>Role</th>
-                  <th>Location</th>
-                  <th>Hired On</th>
-                  <th style={{ width: 80, textAlign: "center" }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((m, idx) => {
-                  const isAssigned = projects.some(p => p.assignments?.some(a => String(a.member_id) === String(m.id)));
-                  return (
-                  <tr key={m.id}>
-                    <td>{idx + 1}</td>
+        <div className="table-wrap" style={{ overflow: "auto", flex: 1 }}>
+          <table className="data-table" id="myTeamTable">
+            <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+              <tr>
+                <th style={{ width: 40 }}><input type="checkbox" className="table-checkbox" checked={selectAll && filtered.length > 0} onChange={toggleSelectAll} /></th>
+                <th style={{ width: 40 }}>#</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>WhatsApp</th>
+                <th>LinkedIn</th>
+                <th>Role</th>
+                <th>Location</th>
+                <th>Hired On</th>
+                <th style={{ width: 80, textAlign: "center" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((m, idx) => {
+                const isAssigned = projects.some(p => p.assignments?.some(a => String(a.member_id) === String(m.id)));
+                const isSelected = selected.has(String(m.id));
+                return (
+                <tr key={m.id} style={{ background: isSelected ? "rgba(100, 200, 255, 0.05)" : "transparent" }}>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" className="table-checkbox" checked={isSelected} onChange={() => toggleMember(String(m.id))} />
+                  </td>
+                  <td><span className="sl-number">{String(idx + 1).padStart(2, '0')}</span></td>
                     <td style={{ fontWeight: 600 }}>
                       {m.name}
                       {m.status === 'archived' && <span style={{ marginLeft: 8, fontSize: 10, padding: "2px 6px", background: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: 4, textTransform: "uppercase" }}>Archived</span>}
@@ -287,13 +429,10 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
               </tbody>
             </table>
           </div>
-          <div style={{ padding: "14px 24px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              Showing <strong>{filtered.length}</strong> members
-            </div>
+          <div className="pagination-bar">
+            <div className="pagination-info">Showing <strong>1-{filtered.length}</strong> of <strong>{filtered.length.toLocaleString()}</strong> members</div>
           </div>
         </div>
-      </div>
 
       {/* Detail Modal */}
       {selectedMember && (
@@ -484,12 +623,13 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
                         projectId: `${p.id}-${pay.id}`,
                         displayId: `${p.id}`,
                         projectName: p.name + (assignment.payments!.length > 1 ? ` (Part ${index + 1})` : ""),
+                        projectType: p.project_type,
                         date: pay.date,
                         leads: assignment.leads,
                         rate: assignment.rate,
                         amount: pay.amount,
                         isPartial: true,
-                        totalCost: assignment.leads * assignment.rate,
+                        totalCost: p.project_type === "Lead Generation" ? assignment.leads * assignment.rate : assignment.rate,
                         paymentIndex: index,
                         allPayments: assignment.payments,
                         isRevised: assignment.is_revised || false
@@ -500,12 +640,13 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
                       projectId: `${p.id}`,
                       displayId: `${p.id}`,
                       projectName: p.name,
+                      projectType: p.project_type,
                       date: p.deadline || new Date(p.id).toLocaleDateString() || "N/A",
                       leads: assignment.leads,
                       rate: assignment.rate,
-                      amount: assignment.leads * assignment.rate,
+                      amount: p.project_type === "Lead Generation" ? assignment.leads * assignment.rate : assignment.rate,
                       isPartial: false,
-                      totalCost: assignment.leads * assignment.rate,
+                      totalCost: p.project_type === "Lead Generation" ? assignment.leads * assignment.rate : assignment.rate,
                       isRevised: assignment.is_revised || false
                     }];
                   }).sort((a, b) => {
@@ -532,7 +673,7 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
                           </div>
                           <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{slip.date}</div>
                           <div style={{ fontSize: 11, color: "var(--text-muted)", background: "var(--bg-input)", padding: "6px 10px", borderRadius: 6, textAlign: "center", fontWeight: 600 }}>
-                            {slip.isPartial ? "Partial Payment" : `${slip.leads} Leads @ ৳${slip.rate}`}
+                            {slip.isPartial ? "Partial Payment" : (slip.projectType === "Lead Generation" ? `${slip.leads} Leads @ ৳${slip.rate}` : "Flat Assignment")}
                           </div>
                           <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                             <div style={{ fontSize: 15, fontWeight: 800, color: "var(--success)" }}>{formatTaka(slip.amount)}</div>
@@ -630,7 +771,7 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
       {/* Professional Payslip Modal */}
       {selectedPayslip && selectedMember && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 999999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div id="payslip-modal-content" style={{ background: "#f4f4f5", color: "#18181b", borderRadius: 12, width: "100%", maxWidth: 520, padding: 32, position: "relative", boxShadow: "0 20px 40px rgba(0,0,0,0.5)", border: "1px solid #e4e4e7", zIndex: 9999999 }}>
+          <div id="payslip-modal-content" style={{ background: "#ffffff", color: "#0f172a", borderRadius: 12, width: "100%", maxWidth: 520, padding: 32, position: "relative", boxShadow: "0 20px 40px rgba(0,0,0,0.5)", border: "1px solid #e2e8f0", zIndex: 9999999 }}>
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #d4d4d8", paddingBottom: 16, marginBottom: 24 }}>
               <div>
@@ -688,7 +829,7 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
               {selectedPayslip.isPartial ? (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, padding: "4px 0", color: "#18181b" }}>
-                    <span>Total Project Cost ({selectedPayslip.leads} Leads @ ৳{selectedPayslip.rate})</span>
+                    <span>Total Project Cost {selectedPayslip.projectType === "Lead Generation" ? `(${selectedPayslip.leads} Leads @ ৳${selectedPayslip.rate})` : ""}</span>
                     <span>{formatTaka(selectedPayslip.totalCost)}</span>
                   </div>
                   {selectedPayslip.allPayments && selectedPayslip.allPayments.slice(0, selectedPayslip.paymentIndex).map((prevPay: any, idx: number) => (
@@ -714,7 +855,7 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
                 </>
               ) : (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 500, padding: "8px 0", color: "#18181b" }}>
-                  <span>{selectedPayslip.leads} Leads @ ৳{selectedPayslip.rate}</span>
+                  <span>{selectedPayslip.projectType === "Lead Generation" ? `${selectedPayslip.leads} Leads @ ৳${selectedPayslip.rate}` : "Assigned Amount"}</span>
                   <span>{formatTaka(selectedPayslip.amount)}</span>
                 </div>
               )}
@@ -747,8 +888,13 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
                 textBreakdown = `Total Cost : ${formatTaka(selectedPayslip.totalCost)}${prevText}\nThis Payment: -${formatTaka(selectedPayslip.amount)}\n----------------------------------\nRemaining Due: ${formatTaka(Math.max(0, due))}`;
                 waBreakdown = `• Total Cost: ${formatTaka(selectedPayslip.totalCost)}${waPrevText}\n• This Payment: -${formatTaka(selectedPayslip.amount)}\n\n*Remaining Due:* ${formatTaka(Math.max(0, due))}`;
               } else {
-                textBreakdown = `Leads      : ${selectedPayslip.leads}\nRate       : ৳${selectedPayslip.rate}`;
-                waBreakdown = `• ${selectedPayslip.leads} Leads @ ৳${selectedPayslip.rate}`;
+                if (selectedPayslip.projectType === "Lead Generation") {
+                  textBreakdown = `Leads      : ${selectedPayslip.leads}\nRate       : ৳${selectedPayslip.rate}`;
+                  waBreakdown = `• ${selectedPayslip.leads} Leads @ ৳${selectedPayslip.rate}`;
+                } else {
+                  textBreakdown = `Assignment Fee: ৳${selectedPayslip.amount}`;
+                  waBreakdown = `• Assignment Fee: ৳${selectedPayslip.amount}`;
+                }
               }
 
               const emailSubject = `Payslip: PS-${selectedPayslip.displayId} ${selectedPayslip.isRevised ? '(REVISED)' : ''} - Dimarz`;
@@ -817,44 +963,63 @@ _Please see the attached PDF for official records._`;
                   
                   showToast("Generating PDF...", "info");
                   
-                  const canvas = await html2canvas(element, { scale: 2, backgroundColor: "#f4f4f5" });
+                  const canvas = await html2canvas(element, { 
+                    scale: 2, 
+                    backgroundColor: "#f8fafc",
+                    useCORS: true,
+                    allowTaint: false
+                  });
+                  
                   const imgData = canvas.toDataURL("image/png");
-                  const pdf = new jsPDF({
+                  
+                  let PDFCtor = jsPDF;
+                  if (typeof PDFCtor !== 'function' && typeof (PDFCtor as any).jsPDF === 'function') {
+                    PDFCtor = (PDFCtor as any).jsPDF;
+                  }
+
+                  const pdf = new PDFCtor({
                     orientation: "portrait",
                     unit: "px",
                     format: [canvas.width, canvas.height]
                   });
                   
                   pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
-                  const pdfBuffer = pdf.output("arraybuffer");
                   
                   const safeName = selectedMember.name.replace(/[^a-zA-Z0-9]/g, '_');
                   const defaultPath = `Payslip_PS-${selectedPayslip.projectId}_${safeName}${selectedPayslip.isRevised ? '_REVISED' : ''}.pdf`;
                   
-                  const filePath = await save({
-                    defaultPath,
-                    filters: [{ name: "PDF", extensions: ["pdf"] }]
-                  });
+                  try {
+                    const pdfBuffer = pdf.output("arraybuffer");
+                    const filePath = await save({
+                      defaultPath,
+                      filters: [{ name: "PDF", extensions: ["pdf"] }]
+                    });
 
-                  if (!filePath) {
-                    showToast("Save cancelled.", "info");
-                    return;
+                    if (!filePath) {
+                      showToast("Save cancelled.", "info");
+                      return;
+                    }
+
+                    await writeFile(filePath, new Uint8Array(pdfBuffer));
+                    showToast("Payslip successfully saved!", "success");
+                  } catch (tauriError: any) {
+                    console.warn("Tauri native save failed, falling back to browser download", tauriError);
+                    pdf.save(defaultPath);
+                    showToast("Payslip saved via browser download!", "success");
                   }
-
-                  await writeFile(filePath, new Uint8Array(pdfBuffer));
-                  showToast("Payslip successfully saved!", "success");
                 } catch (error: any) {
                   console.error("PDF Save Error:", error);
                   showToast("Failed to save PDF: " + (error.message || "Unknown error"), "error");
+                  alert("PDF Error: " + error.message);
                 }
               };
 
               return (
                 <div data-html2canvas-ignore="true" style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 8 }}>
-                  <button onClick={handleSavePDF} style={{ background: "var(--bg-hover)", color: "var(--text-primary)", border: "1px solid var(--border-color)", padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: 24, display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center", transition: "all 0.2s ease" }}>💾 Save PDF</button>
-                  <button onClick={handleEmail} style={{ background: "rgba(59,130,246,0.1)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.2)", padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: 24, display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center", transition: "all 0.2s ease" }}>📧 Email</button>
-                  <button onClick={handleWhatsApp} style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.2)", padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: 24, display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center", transition: "all 0.2s ease" }}>💬 WhatsApp</button>
-                  <button onClick={() => setSelectedPayslip(null)} style={{ padding: "12px 24px", background: "var(--text-primary)", color: "var(--bg-primary)", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", borderRadius: 24, width: "100%", marginTop: 8, transition: "all 0.2s ease" }}>✕ Close</button>
+                  <button onClick={() => setSelectedPayslip(null)} style={{ padding: "10px 16px", borderRadius: 8, background: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>Close</button>
+                  <button onClick={handleSavePDF} style={{ padding: "10px 16px", borderRadius: 8, background: "#0f172a", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>Save PDF</button>
+                  <button onClick={handleEmail} style={{ padding: "10px 16px", borderRadius: 8, background: "#3b82f6", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>Email</button>
+                  <button onClick={handleWhatsApp} style={{ padding: "10px 16px", borderRadius: 8, background: "#22c55e", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>WhatsApp</button>
                 </div>
               );
             })()}

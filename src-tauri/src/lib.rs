@@ -50,6 +50,16 @@ async fn initialize_app(
     Ok("initialized".to_string())
 }
 
+#[tauri::command]
+async fn close_splashscreen(app: tauri::AppHandle) {
+    if let Some(splashscreen) = app.get_webview_window("splashscreen") {
+        splashscreen.close().unwrap();
+    }
+    if let Some(main_window) = app.get_webview_window("main") {
+        main_window.show().unwrap();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -71,6 +81,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             initialize_app,
+            close_splashscreen,
             commands::get_hardware_id,
             commands::activate_license,
             commands::check_license,

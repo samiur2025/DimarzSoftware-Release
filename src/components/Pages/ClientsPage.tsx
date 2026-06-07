@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { Project } from "./ProjectsPage";
+import { AppContext } from "../../App";
 interface Props {
 className: string;
 }
@@ -21,23 +22,12 @@ total_invoiced: number;
 total_paid: number;
 total_due: number;
 }
-const SAMPLE_CLIENTS: Client[] = [
-  { id: 1, name: "TechVision Inc", email: "contact@techvision.io", website: "techvision.io", linkedin: "linkedin.com/company/techvision", country: "USA", source: "Upwork", address: "123 Tech St, Silicon Valley, CA 94025", status: "Active" },
-  { id: 2, name: "FinEdge Partners", email: "hello@finedge.co", website: "finedge.co", linkedin: null, country: "UK", source: "Direct Contact", address: "45 Financial District, London, EC2N 1AR", status: "Active" },
-  { id: 3, name: "MediFlow Health", email: "bd@mediflow.com", website: "mediflow.com", linkedin: null, country: "Canada", source: "LinkedIn", address: "789 Health Pkwy, Toronto, ON M5V 2H1", status: "Active" },
-  { id: 4, name: "GrowthLab Marketing", email: "team@growthlab.io", website: "growthlab.io", linkedin: null, country: "Australia", source: "Referral", address: "101 Marketing Ave, Sydney, NSW 2000", status: "Active" },
-  { id: 5, name: "EduSphere Online", email: "ops@edusphere.edu", website: "edusphere.edu", linkedin: null, country: "Singapore", source: "Fiverr", address: "50 Education Hub, Singapore 018983", status: "Inactive" },
-];
+const SAMPLE_CLIENTS: Client[] = [];
 
-const SAMPLE_STATS: Map<number, ClientStats> = new Map([
-  [1, { active_projects: 3, completed_projects: 7, total_invoiced: 1200000, total_paid: 1050000, total_due: 150000 }],
-  [2, { active_projects: 2, completed_projects: 4, total_invoiced: 890000, total_paid: 890000, total_due: 0 }],
-  [3, { active_projects: 1, completed_projects: 5, total_invoiced: 640000, total_paid: 520000, total_due: 120000 }],
-  [4, { active_projects: 4, completed_projects: 2, total_invoiced: 430000, total_paid: 380000, total_due: 50000 }],
-  [5, { active_projects: 0, completed_projects: 3, total_invoiced: 280000, total_paid: 280000, total_due: 0 }],
-]);
+const SAMPLE_STATS: Map<number, ClientStats> = new Map();
 
 const ClientsPage: React.FC<Props> = ({ className }) => {
+const { triggerRefresh } = useContext(AppContext);
 
 const [clients, setClients] = useState<Client[]>(() => {
   const saved = localStorage.getItem("dimrz_clients");
@@ -45,6 +35,7 @@ const [clients, setClients] = useState<Client[]>(() => {
 });
 useEffect(() => {
   localStorage.setItem("dimrz_clients", JSON.stringify(clients));
+  triggerRefresh();
 }, [clients]);
 
 const [projects, setProjects] = useState<Project[]>(() => {
@@ -66,6 +57,9 @@ useEffect(() => {
 const [statsMap] = useState<Map<number, ClientStats>>(SAMPLE_STATS);
 const [showForm, setShowForm] = useState(false);
 const [search, setSearch] = useState("");
+
+const [selected, setSelected] = useState<Set<number>>(new Set());
+const [selectAll, setSelectAll] = useState(false);
 
 const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 const [editMode, setEditMode] = useState(false);
@@ -136,37 +130,146 @@ const filtered = clients.filter(c =>
 c.name.toLowerCase().includes(search.toLowerCase()) ||
 (c.email?.toLowerCase() || "").includes(search.toLowerCase())
 );
+
+let totalReceived = 0;
+let totalDue = 0;
+filtered.forEach(c => {
+  const stats = statsMap.get(c.id);
+  if (stats) {
+    totalReceived += stats.total_paid;
+    totalDue += stats.total_due;
+  }
+});
+const totalClients = filtered.length;
+
+const toggleSelectAll = () => {
+  if (selectAll) {
+    setSelected(new Set());
+  } else {
+    setSelected(new Set(filtered.map(c => c.id)));
+  }
+  setSelectAll(!selectAll);
+};
+
+const toggleClient = (id: number) => {
+  const next = new Set(selected);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  setSelected(next);
+};
+
+const handleDeleteSelected = () => {
+  if (selected.size === 0) return;
+  const clientsToDelete = clients.filter(c => selected.has(c.id));
+  
+  const hasProjects = clientsToDelete.some(c => projects.some(p => p.client_id === c.id));
+  if (hasProjects) {
+    alert("⚠️ Action Blocked: One or more selected clients have historical projects. Please deselect them or change their status to 'Inactive'.");
+    return;
+  }
+
+  if (confirm(`Are you sure you want to permanently delete ${selected.size} client(s)?`)) {
+    setClients(clients.filter(c => !selected.has(c.id)));
+    if (selectedClient && selected.has(selectedClient.id)) {
+      setSelectedClient(null);
+    }
+    setSelected(new Set());
+    setSelectAll(false);
+  }
+};
+
+const handleExport = () => {
+  if (filtered.length === 0) {
+    alert("No data to export");
+    return;
+  }
+  
+  const targetClients = selected.size > 0 ? clients.filter(c => selected.has(c.id)) : filtered;
+  
+  const headers = ["ID", "Name", "Email", "Website", "LinkedIn", "Country", "Source", "Address", "Status"];
+  const rows = targetClients.map(c => [
+    c.id, c.name, c.email || "", c.website || "", c.linkedin || "", c.country || "", c.source, c.address || "", c.status
+  ]);
+  
+  const csvContent = [
+    headers.join(","),
+    ...rows.map(e => e.map(field => `"${String(field).replace(/"/g, '""')}"`).join(","))
+  ].join("\n");
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "dimrz_clients_export.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 const formatTaka = (n: number) => `৳${n.toLocaleString("en-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const openEditModal = (c: Client) => {
+  setSelectedClient(c);
+  setEditDraft({ ...c });
+  setEditMode(true);
+};
+
 return (
 <div className={className} id="clientsPage">
-<div style={{ width: "100%", padding: "0 24px", boxSizing: "border-box" }}>
-<div className="content-header" style={{ paddingLeft: 0, paddingRight: 0 }}>
-<div className="header-left">
-<div>
-<div className="page-title" style={{ fontSize: 22, fontStyle: "italic", fontWeight: 800, letterSpacing: "-0.5px" }}>CLIENT PORTFOLIO</div>
-<div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Manage client accounts and their lead sources.</div>
-</div>
-</div>
-<div className="header-actions">
-<button className="btn btn-primary" onClick={handleOpenCreateForm}><span>➕</span> Register Client</button>
-</div>
-</div>
-<div className="card" style={{ padding: 0, overflow: "hidden" }}>
-<div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-<div className="search-box" style={{ position: "relative", width: 320 }}>
-<span className="search-icon" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>🔍</span>
-<input type="text" placeholder="Search by name, email, or source..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
-</div>
-<div style={{ display: "flex", gap: 8 }}>
-<button className="btn btn-secondary" onClick={() => setSearch("")} style={{ fontSize: 12, padding: "6px 12px" }}><span>↺</span> Reset</button>
-<button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }}><span>📥</span> Download</button>
-</div>
-</div>
-<div style={{ overflowX: "auto" }}>
+
+  {/* ── Stats Cards ── */}
+  <div className="leads-stat-cards">
+    <div className="leads-stat-card leads-stat-card--dark">
+      <div className="lsc-number">{totalClients.toLocaleString()}</div>
+      <div className="lsc-label">TOTAL CLIENTS</div>
+    </div>
+    <div className="leads-stat-card leads-stat-card--blue">
+      <div className="lsc-number">{formatTaka(totalReceived)}</div>
+      <div className="lsc-label">TOTAL PAYMENT RECEIVED</div>
+    </div>
+    <div className="leads-stat-card leads-stat-card--orange">
+      <div className="lsc-number">{formatTaka(totalDue)}</div>
+      <div className="lsc-label">TOTAL DUE</div>
+    </div>
+  </div>
+
+  <div className="content-header">
+    <div className="header-left">
+      <h1 className="page-title">All Clients</h1>
+      <span className="total-count">Total: <strong>{totalClients.toLocaleString()}</strong> clients {selected.size > 0 && `| ${selected.size} selected`}</span>
+    </div>
+    <div className="header-actions">
+      <button className="btn btn-secondary" onClick={() => triggerRefresh()} title="Force Refresh Data">
+        🔄 Refresh
+      </button>
+      <button className="btn btn-secondary" onClick={toggleSelectAll}>
+        <span>{selected.size > 0 ? "✕" : "☐"}</span> {selected.size > 0 ? "Clear Selection" : "Select All"}
+      </button>
+      <button className="btn btn-danger" onClick={handleDeleteSelected} disabled={selected.size === 0}>
+        <span>🗑</span> Delete
+      </button>
+      <button className="btn btn-secondary" onClick={handleExport}>
+        <span>📤</span> Export CSV
+      </button>
+      <button className="btn btn-import" onClick={handleOpenCreateForm}>
+        <span>➕</span> Register Client
+      </button>
+    </div>
+  </div>
+
+  <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", borderLeft: "1px solid var(--border-color)", borderRight: "1px solid var(--border-color)" }}>
+    <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+      <div className="search-box" style={{ position: "relative", width: 320 }}>
+        <span className="search-icon" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>🔍</span>
+        <input type="text" placeholder="Search by name, email, or source..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
+      </div>
+    </div>
+<div style={{ overflowX: "auto", flex: 1 }}>
 <table className="data-table" id="clientsTable" style={{ fontSize: 13 }}>
-<thead>
+<thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
 <tr>
-<th style={{ width: 30 }}><input type="checkbox" className="table-checkbox" /></th>
+<th style={{ width: 40 }}><input type="checkbox" className="table-checkbox" checked={selectAll} onChange={toggleSelectAll} /></th>
+<th style={{ width: 40 }}>#</th>
 <th>Client Identity</th>
 <th>Lead Source</th>
 <th>Status</th>
@@ -175,16 +278,17 @@ return (
 <th style={{ textAlign: "right" }}>Invoiced</th>
 <th style={{ textAlign: "right" }}>Paid</th>
 <th style={{ textAlign: "right" }}>Due</th>
-<th style={{ width: 120, textAlign: "center" }}>Operations</th>
+<th style={{ width: 120, textAlign: "center" }}>Action</th>
 </tr>
 </thead>
 <tbody>
-{filtered.map(c => {
+{filtered.map((c, index) => {
 const stats = statsMap.get(c.id);
 const initials = c.name.split(" ").map(x => x[0]).join("").substring(0, 2).toUpperCase();
 return (
 <tr key={c.id}>
-<td><input type="checkbox" className="table-checkbox" /></td>
+<td><input type="checkbox" className="table-checkbox" checked={selected.has(c.id)} onChange={() => toggleClient(c.id)} /></td>
+<td><span className="sl-number">{(index + 1).toString().padStart(2, "0")}</span></td>
 <td>
 <div className="client-identity">
 <div className="client-avatar">{initials}</div>
@@ -203,7 +307,7 @@ return (
 <td className={`financial-cell ${stats && stats.total_due > 0 ? "financial-due" : ""}`}>{formatTaka(stats?.total_due || 0)}</td>
 <td style={{ textAlign: "center" }}>
 <button className="ops-btn view" title="View" onClick={() => setSelectedClient(c)}>👁</button>
-<button className="ops-btn edit" title="Edit">✎</button>
+<button className="ops-btn edit" title="Edit" onClick={() => openEditModal(c)}>✎</button>
 <button className="ops-btn delete" title="Delete" onClick={() => deleteClient(c.id)}>🗑</button>
 </td>
 </tr>
@@ -211,7 +315,7 @@ return (
 })}
 {filtered.length === 0 && (
 <tr>
-<td colSpan={10} style={{ padding: 60, textAlign: "center", color: "var(--text-muted)" }}>
+<td colSpan={11} style={{ padding: 60, textAlign: "center", color: "var(--text-muted)" }}>
 <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}>📂</div>
 <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "var(--text-secondary)" }}>No clients found</div>
 <div style={{ fontSize: 13 }}>Register your first client to get started.</div>
@@ -221,9 +325,8 @@ return (
 </tbody>
 </table>
 </div>
-<div style={{ padding: "14px 24px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-<div style={{ fontSize: 12, color: "var(--text-muted)" }}>Showing <strong>1-{Math.min(filtered.length, 10)}</strong> of <strong>{filtered.length}</strong> clients</div>
-<div style={{ display: "flex", gap: 4 }}></div>
+<div className="pagination-bar">
+  <div className="pagination-info">Showing <strong>1-{Math.min(filtered.length, 10)}</strong> of <strong>{filtered.length}</strong></div>
 </div>
 </div>
 
@@ -275,8 +378,6 @@ return (
     </div>
   </div>
 )}
-
-</div>
 
 {/* Client Profile Modal */}
 {selectedClient && (

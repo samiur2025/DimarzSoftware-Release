@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AppContext } from "../../App";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 interface Props {
 className: string;
 }
@@ -35,24 +37,12 @@ shared_sheet?: string;
 target_leads?: number;
 assignments?: Assignment[];
 }
-const SAMPLE_PROJECTS: Project[] = [
-  { id: 1, name: "Lead Generation - USA Tech Startups (Batch 1)", description: "Generate 50K leads for US tech startups", client_id: 1, project_type: "Lead Generation", value: 300000, invoiced: 250000, paid: 250000, status: "completed", deadline: "2026-03-31", progress: 100 },
-  { id: 2, name: "Email Outreach Campaign - UK Finance Q1", description: "Cold email campaign targeting UK finance sector", client_id: 2, project_type: "Email Marketing", value: 180000, invoiced: 180000, paid: 180000, status: "completed", deadline: "2026-02-28", progress: 100 },
-  { id: 3, name: "Healthcare Database Build - Canada 2026", description: "Targeted healthcare professional database", client_id: 3, project_type: "Lead Generation", value: 250000, invoiced: 120000, paid: 120000, status: "active", deadline: "2026-07-30", progress: 48 },
-  { id: 4, name: "SaaS Startup Prospecting - APAC Region", description: "Find and qualify SaaS leads in APAC", client_id: 1, project_type: "Lead Generation", value: 400000, invoiced: 200000, paid: 150000, status: "active", deadline: "2026-08-15", progress: 35 },
-  { id: 5, name: "Digital Marketing Leads - Australia", description: null, client_id: 4, project_type: "Data Research", value: 150000, invoiced: 75000, paid: 50000, status: "pending", deadline: "2026-09-01", progress: 20 },
-];
+const SAMPLE_PROJECTS: Project[] = [];
 
-const SAMPLE_CLIENT_MAP: Map<number, string> = new Map([
-  [1, "TechVision Inc"],
-  [2, "FinEdge Partners"],
-  [3, "MediFlow Health"],
-  [4, "GrowthLab Marketing"],
-  [5, "EduSphere Online"],
-]);
+const SAMPLE_CLIENT_MAP: Map<number, string> = new Map();
 
 const ProjectsPage: React.FC<Props> = ({ className }) => {
-const { agency, showToast, showPage } = useContext(AppContext);
+const { agency, showToast, showPage, refreshTrigger } = useContext(AppContext);
 const shortName = agency.name.split(' - ')[0] || agency.name;
 
 const [projects, setProjects] = useState<Project[]>(() => {
@@ -72,29 +62,46 @@ useEffect(() => {
       }
     }
   };
+  const handleOpenInvoice = (e: any) => {
+    const projectId = e.detail?.projectId;
+    if (projectId) {
+      const proj = projects.find(p => String(p.id) === String(projectId));
+      if (proj) {
+        showPage("projects");
+        setPreviewInvoice(proj);
+      }
+    }
+  };
   window.addEventListener("open-project-view", handleOpenProject);
-  return () => window.removeEventListener("open-project-view", handleOpenProject);
+  window.addEventListener("open-invoice-modal", handleOpenInvoice);
+  return () => {
+    window.removeEventListener("open-project-view", handleOpenProject);
+    window.removeEventListener("open-invoice-modal", handleOpenInvoice);
+  };
 }, [projects]);
 
-const [clients] = useState<Map<number, string>>(() => {
-  const saved = localStorage.getItem("dimrz_clients");
-  if (saved) {
-    const parsed = JSON.parse(saved);
+const [clients, setClients] = useState<Map<number, string>>(new Map());
+const [teamMembers, setTeamMembers] = useState<{id: string; name: string}[]>([]);
+
+useEffect(() => {
+  const savedClients = localStorage.getItem("dimrz_clients");
+  if (savedClients) {
+    const parsed = JSON.parse(savedClients);
     const map = new Map<number, string>();
     parsed.forEach((c: any) => map.set(c.id, c.name));
-    return map;
+    setClients(map);
+  } else {
+    setClients(SAMPLE_CLIENT_MAP);
   }
-  return SAMPLE_CLIENT_MAP;
-});
 
-const [teamMembers] = useState<{id: string; name: string}[]>(() => {
-  const saved = localStorage.getItem("dimrz_my_team");
-  if (saved) {
-    const parsed = JSON.parse(saved);
-    return parsed.map((m: any) => ({ id: String(m.id), name: m.name }));
+  const savedTeam = localStorage.getItem("dimrz_my_team");
+  if (savedTeam) {
+    const parsed = JSON.parse(savedTeam);
+    setTeamMembers(parsed.map((m: any) => ({ id: String(m.id), name: m.name })));
+  } else {
+    setTeamMembers([]);
   }
-  return [{id: "1", name: "Admin"}, {id: "2", name: "Team Member"}];
-});
+}, [refreshTrigger]);
 
 const [search, setSearch] = useState("");
 const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -103,6 +110,7 @@ const [editDraft, setEditDraft] = useState<Project | null>(null);
 const [assignments, setAssignments] = useState<Assignment[]>([]);
 
 const [showFinancialModal, setShowFinancialModal] = useState(false);
+const [previewInvoice, setPreviewInvoice] = useState<Project | null>(null);
 const [finMode, setFinMode] = useState<"invoice" | "payment">("invoice");
 const [invoiceAmount, setInvoiceAmount] = useState<number | "">("");
 const [paymentAmount, setPaymentAmount] = useState<number | "">("");
@@ -665,23 +673,36 @@ return (
             </div>
             <button onClick={handleAddAssignment} style={{ padding: "6px 14px", background: "var(--info)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>＋ Assign Team Member</button>
           </div>
-          {assignments.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 0.8fr 0.8fr 1fr 32px", gap: 8, marginBottom: 8, padding: "0 4px" }}>
-              {["TEAM MEMBER", "DEADLINE", "LEADS", "RATE (৳)", "COST (৳)", ""].map(h => (<div key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--text-muted)" }}>{h}</div>))}
-            </div>
-          )}
+          {assignments.length > 0 && (() => {
+            const isLeadGen = editDraft.project_type === "Lead Generation";
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: isLeadGen ? "2fr 1.2fr 0.8fr 0.8fr 1fr 32px" : "2fr 1.2fr 1.5fr 32px", gap: 8, marginBottom: 8, padding: "0 4px" }}>
+                {(isLeadGen ? ["TEAM MEMBER", "DEADLINE", "LEADS", "RATE (৳)", "COST (৳)", ""] : ["TEAM MEMBER", "DEADLINE", "AMOUNT (৳)", ""]).map(h => (<div key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--text-muted)" }}>{h}</div>))}
+              </div>
+            );
+          })()}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {assignments.map(a => {
-              const cost = a.leads * a.rate;
+              const isLeadGen = editDraft.project_type === "Lead Generation";
+              const cost = isLeadGen ? (a.leads || 0) * (a.rate || 0) : (a.rate || 0);
+
+              const handleAmountChange = (val: string) => {
+                 setAssignments(assignments.map(assign => assign.id === a.id ? { ...assign, rate: val === "" ? ("" as any) : Number(val), leads: 1 } : assign));
+              };
+
               return (
-                <div key={a.id} style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 0.8fr 0.8fr 1fr 32px", gap: 8, alignItems: "center", background: "var(--bg-primary)", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border-color)" }}>
+                <div key={a.id} style={{ display: "grid", gridTemplateColumns: isLeadGen ? "2fr 1.2fr 0.8fr 0.8fr 1fr 32px" : "2fr 1.2fr 1.5fr 32px", gap: 8, alignItems: "center", background: "var(--bg-primary)", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border-color)" }}>
                   <select value={a.member_id} onChange={e => handleAssignmentChange(a.id, "member_id", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none" }}>
                     {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                   <input type="date" value={a.deadline} onChange={e => handleAssignmentChange(a.id, "deadline", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", width: "100%" }} />
-                  <input type="number" value={a.leads || ""} placeholder="0" onChange={e => handleAssignmentChange(a.id, "leads", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none", width: "100%" }} />
-                  <input type="number" value={a.rate || ""} placeholder="0" onChange={e => handleAssignmentChange(a.id, "rate", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none", width: "100%" }} />
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--info)", textAlign: "right" }}>{formatTaka(cost)}</div>
+                  {isLeadGen && <input type="number" value={a.leads || ""} placeholder="0" onChange={e => handleAssignmentChange(a.id, "leads", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none", width: "100%" }} />}
+                  {isLeadGen ? (
+                    <input type="number" value={a.rate || ""} placeholder="0" onChange={e => handleAssignmentChange(a.id, "rate", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none", width: "100%" }} />
+                  ) : (
+                    <input type="number" value={a.rate || ""} placeholder="0" onChange={e => handleAmountChange(e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none", width: "100%" }} />
+                  )}
+                  {isLeadGen && <div style={{ fontSize: 13, fontWeight: 700, color: "var(--info)", textAlign: "right" }}>{formatTaka(cost)}</div>}
                   <button onClick={() => handleRemoveAssignment(a.id)} style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(192,68,94,0.1)", border: "1px solid rgba(192,68,94,0.3)", color: "var(--danger)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✕</button>
                 </div>
               );
@@ -693,8 +714,9 @@ return (
             </div>
           )}
           {assignments.length > 0 && (() => {
-            const totalLeads = assignments.reduce((s, a) => s + a.leads, 0);
-            const totalCost = assignments.reduce((s, a) => s + (a.leads * a.rate), 0);
+            const isLeadGen = editDraft.project_type === "Lead Generation";
+            const totalLeads = assignments.reduce((s, a) => s + (a.leads || 0), 0);
+            const totalCost = assignments.reduce((s, a) => s + (isLeadGen ? (a.leads || 0) * (a.rate || 0) : (a.rate || 0)), 0);
             return (
               <div style={{ marginTop: 16, padding: "14px 18px", background: "var(--bg-primary)", borderRadius: 10, border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
@@ -702,10 +724,12 @@ return (
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Total Assigned: <span style={{ color: "var(--info)" }}>{assignments.length}</span></div>
                 </div>
                 <div style={{ display: "flex", gap: 32, textAlign: "right" }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Leads</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--success)" }}>{totalLeads.toLocaleString()}</div>
-                  </div>
+                  {isLeadGen && (
+                    <div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Leads</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--success)" }}>{totalLeads.toLocaleString()}</div>
+                    </div>
+                  )}
                   <div>
                     <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Deployment Cost</div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: "var(--info)" }}>{formatTaka(totalCost)}</div>
@@ -877,6 +901,96 @@ return (
           </button>
         </div>
 
+      </div>
+    </div>
+  );
+})()}
+
+{/* Professional Invoice Preview Modal */}
+{previewInvoice && (() => {
+  const due = previewInvoice.invoiced - previewInvoice.paid;
+  const clientName = clients.get(previewInvoice.client_id || 0) || "Unknown Client";
+  
+  const textBreakdown = `Project Name: ${previewInvoice.name}\nTotal Value: ${formatTaka(previewInvoice.value)}\n----------------------------------\nTotal Invoiced: ${formatTaka(previewInvoice.invoiced)}\nTotal Paid: -${formatTaka(previewInvoice.paid)}\n----------------------------------\nRemaining Balance Due: ${formatTaka(Math.max(0, due))}`;
+  const waBreakdown = `*Project:* ${previewInvoice.name}\n*Total Value:* ${formatTaka(previewInvoice.value)}\n\n• *Total Invoiced:* ${formatTaka(previewInvoice.invoiced)}\n• *Total Paid:* -${formatTaka(previewInvoice.paid)}\n\n💰 *Remaining Due:* ${formatTaka(Math.max(0, due))}`;
+  
+  const emailSubject = `Invoice Statement: PRJ-${previewInvoice.id} - Dimarz`;
+  const emailBody = `Hello ${clientName},\n\nPlease find the details of your project invoice statement below.\n\n==================================\nINVOICE STATEMENT\n==================================\nReference  : PRJ-${previewInvoice.id}\nDate       : ${new Date().toLocaleDateString()}\n\n----------------------------------\nBREAKDOWN\n----------------------------------\n${textBreakdown}\n\nPlease see the attached PDF for your official records.\n\nBest regards,\nDimarz Team`;
+  const waMessage = `*INVOICE STATEMENT: PRJ-${previewInvoice.id}* 🧾\n_Dimarz Lead Software_\n\nHello *${clientName}*, here is your project billing summary:\n\n${waBreakdown}\n\n_Please let us know if you have any questions!_`;
+
+  const handleSavePDF = async () => {
+    try {
+      const element = document.getElementById("invoice-modal-content");
+      if (!element) throw new Error("Invoice UI not found.");
+      showToast("Generating PDF...", "info");
+      const canvas = await html2canvas(element, { scale: 2, backgroundColor: "#f8fafc", useCORS: true, allowTaint: false });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width / 2, canvas.height / 2] });
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width / 2, canvas.height / 2);
+      pdf.save(`Invoice_PRJ-${previewInvoice.id}.pdf`);
+      showToast("PDF saved successfully!", "success");
+    } catch (err: any) {
+      showToast("Failed to generate PDF: " + err.message, "error");
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 999999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div id="invoice-modal-content" style={{ background: "#ffffff", color: "#0f172a", borderRadius: 12, width: "100%", maxWidth: 520, padding: 32, position: "relative", boxShadow: "0 20px 40px rgba(0,0,0,0.5)", border: "1px solid #e2e8f0", zIndex: 9999999 }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #cbd5e1", paddingBottom: 16, marginBottom: 24 }}>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: -1, textTransform: "uppercase", color: "#0f172a" }}>INVOICE</div>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 600, marginTop: 4 }}>ID: PRJ-{previewInvoice.id}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>DIMARZ</div>
+            <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase" }}>Lead Software</div>
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Date: {new Date().toLocaleDateString()}</div>
+          </div>
+        </div>
+
+        {/* Client Details */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Bill To</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>{clientName}</div>
+          <div style={{ fontSize: 13, color: "#334155", marginTop: 4, fontWeight: 600 }}>Project: {previewInvoice.name}</div>
+        </div>
+
+        {/* Calculation Breakdown */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #cbd5e1", paddingBottom: 8, marginBottom: 12, fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>
+            <span>Description</span>
+            <span>Amount</span>
+          </div>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 600, padding: "6px 0", color: "#0f172a" }}>
+            <span>Total Project Value</span>
+            <span>{formatTaka(previewInvoice.value)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 500, padding: "6px 0", color: "#334155" }}>
+            <span>Total Amount Invoiced</span>
+            <span>{formatTaka(previewInvoice.invoiced)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 500, padding: "6px 0", color: "#334155" }}>
+            <span>Total Amount Paid</span>
+            <span>-{formatTaka(previewInvoice.paid)}</span>
+          </div>
+        </div>
+
+        {/* Total */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "2px solid #94a3b8", paddingTop: 16, marginBottom: 32 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, textTransform: "uppercase", color: "#0f172a" }}>Balance Due</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: due > 0 ? "#dc2626" : "#16a34a" }}>{formatTaka(Math.max(0, due))}</div>
+        </div>
+
+        {/* Actions (Hidden in PDF) */}
+        <div data-html2canvas-ignore="true" style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 8 }}>
+          <button onClick={() => setPreviewInvoice(null)} style={{ padding: "10px 16px", borderRadius: 8, background: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>Close</button>
+          <button onClick={handleSavePDF} style={{ padding: "10px 16px", borderRadius: 8, background: "#0f172a", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>Save PDF</button>
+          <button onClick={() => window.open(`mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`)} style={{ padding: "10px 16px", borderRadius: 8, background: "#3b82f6", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>Email</button>
+          <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(waMessage)}`)} style={{ padding: "10px 16px", borderRadius: 8, background: "#22c55e", color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", flex: 1, minWidth: 100 }}>WhatsApp</button>
+        </div>
       </div>
     </div>
   );

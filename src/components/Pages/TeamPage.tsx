@@ -290,16 +290,26 @@ const TeamPage: React.FC<Props> = ({ className }) => {
   return (
     <div className={className} id="teamPage" style={{ padding: 0, overflow: "hidden", flexDirection: "column" }}>
       <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
+        {/* ── Stats Cards ── */}
+        <div className="leads-stat-cards">
+          <div className="leads-stat-card leads-stat-card--dark">
+            <div className="lsc-number">{stats.total.toLocaleString()}</div>
+            <div className="lsc-label">TOTAL APPLICATIONS</div>
+          </div>
+          <div className="leads-stat-card leads-stat-card--blue">
+            <div className="lsc-number">{stats.newCount.toLocaleString()}</div>
+            <div className="lsc-label">NEW APPLICATIONS</div>
+          </div>
+          <div className="leads-stat-card leads-stat-card--orange">
+            <div className="lsc-number">{stats.reviewed.toLocaleString()}</div>
+            <div className="lsc-label">REVIEWED / HIRED</div>
+          </div>
+        </div>
 
-        {/* Header */}
-        <div className="content-header" style={{ paddingLeft: 0, paddingRight: 0 }}>
+        <div className="content-header">
           <div className="header-left">
-            <div>
-              <div className="page-title" style={{ fontSize: 22, fontStyle: "italic", fontWeight: 800, letterSpacing: "-0.5px" }}>ONBOARDING</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                Manage and review incoming team applications from Google Forms.
-              </div>
-            </div>
+            <h1 className="page-title">Onboarding</h1>
+            <span className="total-count">Total: <strong>{filtered.length.toLocaleString()}</strong> applicants {selectedIds.size > 0 && `| ${selectedIds.size} selected`}</span>
           </div>
           <div className="header-actions">
             {selectedIds.size > 0 && (
@@ -307,9 +317,6 @@ const TeamPage: React.FC<Props> = ({ className }) => {
                 <span>👥</span> Hire Selected ({selectedIds.size})
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => { setDraftMember({}); setShowManualForm(true); }} style={{ background: "linear-gradient(135deg, #4a90d4, #2b5c8f)", borderColor: "rgba(74,144,212,0.3)" }}>
-              <span>📝</span> Add Onboarding
-            </button>
             <button className="btn btn-secondary" onClick={() => showPage("gformScript")}>
               <span>📜</span> Send Form
             </button>
@@ -319,60 +326,47 @@ const TeamPage: React.FC<Props> = ({ className }) => {
             <button className="btn btn-primary" onClick={handleSyncNow} disabled={syncing}>
               <span>{syncing ? "⏳" : "🔄"}</span> {syncing ? "Syncing..." : "Sync Now"}
             </button>
+            <button className="btn btn-primary" onClick={() => { setDraftMember({}); setShowManualForm(true); }} style={{ background: "linear-gradient(135deg, #3db87a, #2a8758)", borderColor: "rgba(61,184,122,0.3)" }}>
+              <span>➕</span> Add Manual
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Stat cards - compact style */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-          {[
-            { label: "Total Submissions", value: stats.total, icon: "👥", color: "var(--info)", bg: "rgba(74,144,212,0.1)", sub: "From Google Form" },
-            { label: "New Applications", value: stats.newCount, icon: "🆕", color: "var(--warning)", bg: "rgba(245,158,11,0.1)", sub: "Awaiting review" },
-            { label: "Reviewed", value: stats.reviewed, icon: "✅", color: "var(--success)", bg: "rgba(61,184,122,0.1)", sub: "Processed" },
-          ].map(s => (
-            <div className="card" key={s.label} style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{s.icon}</div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)" }}>{s.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: s.color, lineHeight: 1.2 }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{s.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
+      {/* Card with Search, Table, and Pagination */}
+      <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", borderLeft: "1px solid var(--border-color)", borderRight: "1px solid var(--border-color)", margin: "0 24px 24px" }}>
+        
         {/* Search + filter */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-          <div className="search-box" style={{ position: "relative", flex: 1, maxWidth: 500 }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div className="search-box" style={{ position: "relative", width: 320 }}>
             <span className="search-icon" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>🔍</span>
             <input
               type="text"
               placeholder="Search by name, email, or category..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: "100%", padding: "10px 12px 10px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 14, outline: "none" }}
+              style={{ width: "100%", padding: "8px 12px 8px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, outline: "none" }}
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            style={{ padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 14, outline: "none", cursor: "pointer" }}
-          >
-            <option value="">All Statuses</option>
-            <option value="new">🟡 NEW</option>
-            <option value="reviewed">🟢 Reviewed</option>
-            <option value="rejected">🔴 Rejected</option>
-          </select>
+          <div style={{ display: "flex", gap: 8 }}>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              style={{ padding: "6px 12px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 12, outline: "none", cursor: "pointer" }}
+            >
+              <option value="">All Statuses</option>
+              <option value="new">🟡 NEW</option>
+              <option value="reviewed">🟢 Reviewed</option>
+              <option value="rejected">🔴 Rejected</option>
+            </select>
+            <button className="btn btn-secondary" onClick={() => { setSearch(""); setStatusFilter(""); }} style={{ fontSize: 12, padding: "6px 12px" }}><span>↺</span> Reset Search</button>
+          </div>
         </div>
-
-      </div>
       
-      {/* Scrollable Table Area */}
-      <div style={{ padding: "0 24px 24px", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-          <div style={{ flex: 1, overflow: "auto" }}>
-            <table className="data-table" id="teamTable" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
+        <div className="table-wrap" style={{ overflow: "auto", flex: 1 }}>
+          <table className="data-table" id="teamTable">
+            <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+              <tr>
                   <th style={{ width: 30 }}>
                     <input 
                       type="checkbox" className="table-checkbox" 
@@ -411,7 +405,7 @@ const TeamPage: React.FC<Props> = ({ className }) => {
                         }}
                       />
                     </td>
-                    <td>{idx + 1}</td>
+                    <td><span className="sl-number">{String(idx + 1).padStart(2, '0')}</span></td>
                     <td>{m.submitted_date || "—"}</td>
                     <td style={{ fontWeight: 600 }}>{m.name}</td>
                     <td>
@@ -433,7 +427,7 @@ const TeamPage: React.FC<Props> = ({ className }) => {
                     <td style={{ maxWidth: 160, whiteSpace: "normal", fontSize: 11 }}>{m.address || "—"}</td>
                     <td style={{ fontSize: 10, color: "var(--text-muted)" }}>{m.source}</td>
                     <td><span className={`status-badge ${statusClass(m.status)}`}>{statusLabel(m.status)}</span></td>
-                    <td style={{ textAlign: "center" }}>
+                    <td style={{ textAlign: "center", minWidth: 140 }}>
                       <button className="ops-btn view" title="Hire (Add to My Team)" onClick={() => handleHire(m)} style={{ background: "rgba(34, 197, 94, 0.1)", color: "var(--success)" }}>➕</button>
                       <button className="ops-btn view" title="View" onClick={() => setSelectedMember(m)}>👁</button>
                       <button className="ops-btn edit" title="Mark Reviewed" onClick={() => updateStatus(m.id, "reviewed")}>✓</button>
@@ -444,23 +438,17 @@ const TeamPage: React.FC<Props> = ({ className }) => {
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={12} style={{ padding: 60, textAlign: "center", color: "var(--text-muted)" }}>
-                      <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}>📋</div>
-                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "var(--text-secondary)" }}>No applications</div>
-                      <div style={{ fontSize: 13 }}>
-                        {members.length === 0
-                          ? <>Add a Google Sheet script URL in <strong>Google Form Script</strong>, then click <strong>Sync Now</strong>.</>
-                          : "No results match your search."}
-                      </div>
+                      <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}>📝</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "var(--text-secondary)" }}>No applications found</div>
+                      <div style={{ fontSize: 13 }}>Try adjusting your search or sync from Google Forms.</div>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div style={{ padding: "14px 24px", borderTop: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              Showing <strong>1-{filtered.length}</strong> of <strong>{filtered.length}</strong> applications
-            </div>
+          <div className="pagination-bar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="pagination-info">Showing <strong>1-{filtered.length}</strong> of <strong>{filtered.length.toLocaleString()}</strong> applicants</div>
             {members.length > 0 && (
               <button
                 className="btn btn-danger"
@@ -472,7 +460,6 @@ const TeamPage: React.FC<Props> = ({ className }) => {
             )}
           </div>
         </div>
-      </div>
 
       {/* Detail Modal */}
       {selectedMember && (

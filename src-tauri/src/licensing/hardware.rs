@@ -1,6 +1,9 @@
 use sha2::{Digest, Sha256};
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 pub struct HardwareFingerprint;
 
 impl HardwareFingerprint {
@@ -37,6 +40,7 @@ impl HardwareFingerprint {
         {
             let output = Command::new("wmic")
                 .args(["csproduct", "get", "uuid", "/value"])
+                .creation_flags(0x08000000)
                 .output()
                 .map_err(|e| e.to_string())?;
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -91,6 +95,7 @@ impl HardwareFingerprint {
         {
             let output = Command::new("wmic")
                 .args(["cpu", "get", "ProcessorId", "/value"])
+                .creation_flags(0x08000000)
                 .output()
                 .map_err(|e| e.to_string())?;
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -129,6 +134,7 @@ impl HardwareFingerprint {
         {
             let output = Command::new("wmic")
                 .args(["nic", "where", "NetConnectionStatus=2", "get", "MACAddress", "/value"])
+                .creation_flags(0x08000000)
                 .output()
                 .map_err(|e| e.to_string())?;
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -183,6 +189,7 @@ impl HardwareFingerprint {
         {
             if let Ok(output) = Command::new("wmic")
                 .args(["computersystem", "get", "model", "/value"])
+                .creation_flags(0x08000000)
                 .output()
             {
                 let stdout = String::from_utf8_lossy(&output.stdout);

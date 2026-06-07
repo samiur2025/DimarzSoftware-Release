@@ -30,7 +30,7 @@ const MY_TEAM_STORAGE_KEY = "dimrz_my_team";
 const MyTeamPage: React.FC<Props> = ({ className }) => {
   const { showPage, showToast } = useContext(AppContext);
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [projects, setProjects] = useState<Project[]>(() => {
+  const [projects] = useState<Project[]>(() => {
     const saved = localStorage.getItem("dimrz_projects");
     return saved ? JSON.parse(saved) : [];
   });

@@ -216,9 +216,6 @@ const handleConfirmFinancial = () => {
   }
 };
 
-const handleGeneratePayslip = (memberName: string) => {
-  if (showToast) showToast(`Payslip securely generated for ${memberName}.`, "success");
-};
 
 const handleConfirmTeamPayment = () => {
   if (!selectedProject || !payMemberAssignment) return;

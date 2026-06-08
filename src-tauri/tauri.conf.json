@@ -39,7 +39,7 @@
 }
 ],
 "security": {
-"csp": "default-src 'self'; connect-src 'self' https://api.dimrz.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; script-src 'self'"
+"csp": "default-src 'self'; connect-src 'self' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; script-src 'self'"
 }
 },
 "bundle": {

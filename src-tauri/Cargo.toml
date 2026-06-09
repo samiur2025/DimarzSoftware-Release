@@ -1,6 +1,6 @@
 [package]
 name = "dimrz-desktop"
-version = "1.1.2"
+version = "1.1.5"
 description = "Dimrz - Digital Marketing Zone Desktop App"
 authors = ["Dimrz Team"]
 license = "Proprietary"

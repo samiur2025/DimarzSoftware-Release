@@ -27,6 +27,8 @@ pub struct Lead {
     pub source: String,
     pub last_contact: String,
     pub assigned_to: String,
+    pub facebook_url: String,
+    pub instagram_url: String,
 }
 #[derive(Serialize, Deserialize)]
 pub struct LeadFilter {
@@ -150,6 +152,8 @@ pub struct AuditRow {
     pub generated_person: String,
     pub status_field: String,
     pub priority: String,
+    pub facebook_url: String,
+    pub instagram_url: String,
     pub audit_status: String,
 }
 

@@ -57,7 +57,9 @@ impl Database {
                 last_contact TEXT,
                 assigned_to TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_deleted BOOLEAN DEFAULT false
+                is_deleted BOOLEAN DEFAULT false,
+                facebook_url TEXT,
+                instagram_url TEXT
             );
             DROP INDEX IF EXISTS idx_leads_country;
             DROP INDEX IF EXISTS idx_leads_industry;
@@ -139,6 +141,27 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             }
         }
 
+        // Check if facebook_url column exists. If not, add facebook_url and instagram_url.
+        let mut fb_col_exists = false;
+        if let Ok(mut stmt) = self.conn.prepare("SELECT 1 FROM information_schema.columns WHERE table_name = 'leads' AND column_name = 'facebook_url'") {
+            fb_col_exists = stmt.exists([]).unwrap_or(false);
+        }
+
+        if !fb_col_exists {
+            if let Err(e) = self.conn.execute(
+                "ALTER TABLE leads ADD COLUMN facebook_url TEXT",
+                [],
+            ) {
+                log::warn!("Failed to add facebook_url column: {}", e);
+            }
+            if let Err(e) = self.conn.execute(
+                "ALTER TABLE leads ADD COLUMN instagram_url TEXT",
+                [],
+            ) {
+                log::warn!("Failed to add instagram_url column: {}", e);
+            }
+        }
+
         Ok(())
     }
 
@@ -178,6 +201,8 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             "additional_info",
             "assigned_to",
             "source",
+            "facebook_url",
+            "instagram_url",
         ];
 
         let mut select_cols = Vec::new();
@@ -279,7 +304,7 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             self.conn.execute(&query, []).map_err(|e| format!("Failed to restore from Parquet: {}", e))?;
         } else {
             // Merge logic: Map explicit columns and assign new SL/IDs
-            let standard_cols = "country, industry, niche, business_name, person_name, title, business_email, phone, address, city, state, website, person_linkedin, company_linkedin, personal_email, revenue, size, additional_info, generated_person, status, priority, source, last_contact, assigned_to";
+            let standard_cols = "country, industry, niche, business_name, person_name, title, business_email, phone, address, city, state, website, person_linkedin, company_linkedin, personal_email, revenue, size, additional_info, generated_person, status, priority, source, last_contact, assigned_to, facebook_url, instagram_url";
             
             let query = format!(
                 "INSERT INTO leads ({}, sl) SELECT {}, (SELECT COALESCE(MAX(sl), 0) FROM leads) + row_number() OVER () FROM read_parquet('{}')",
@@ -377,8 +402,21 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             select_cols = payload.columns.clone();
         }
         
-        // Cast all selected columns to VARCHAR to ensure consistent export formatting
-        let select_clause = select_cols.iter().map(|c| format!("CAST({} AS VARCHAR)", c)).collect::<Vec<_>>().join(", ");
+        let format_header = |s: &str| -> String {
+            s.split('_')
+                .map(|word| {
+                    let mut c = word.chars();
+                    match c.next() {
+                        None => String::new(),
+                        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+
+        // Cast all selected columns to VARCHAR to ensure consistent export formatting and add a formatted Title Case alias
+        let select_clause = select_cols.iter().map(|c| format!("CAST({} AS VARCHAR) AS \"{}\"", c, format_header(c))).collect::<Vec<_>>().join(", ");
         let mut sql = format!("SELECT {} FROM leads WHERE {}", select_clause, where_clause);
         
         // Handle limit
@@ -493,6 +531,8 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     source: row.get::<_, Option<String>>(23)?.unwrap_or_default(),
                     last_contact: row.get::<_, Option<String>>(24)?.unwrap_or_default(),
                     assigned_to: row.get::<_, Option<String>>(25)?.unwrap_or_default(),
+                    facebook_url: row.get::<_, Option<String>>(28)?.unwrap_or_default(),
+                    instagram_url: row.get::<_, Option<String>>(29)?.unwrap_or_default(),
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -877,6 +917,8 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
         let idx_status = get_idx("status");
         let idx_priority = get_idx("priority");
         let _idx_source = get_idx("source");
+        let idx_facebook_url = get_idx("facebook");
+        let idx_instagram_url = get_idx("instagram");
 
         let _check_hard = self.conn.prepare("SELECT 1 FROM leads WHERE is_deleted = false AND ((business_email = ? AND business_email != '') OR (personal_email = ? AND personal_email != '') OR (phone = ? AND phone != '') OR (person_linkedin = ? AND person_linkedin != '')) LIMIT 1").map_err(|e| e.to_string())?;
 
@@ -1069,6 +1111,8 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
                     generated_person: gen_person,
                     status_field,
                     priority,
+                    facebook_url: get_val(idx_facebook_url),
+                    instagram_url: get_val(idx_instagram_url),
                     audit_status: status,
                 });
             }
@@ -1321,7 +1365,7 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
                 business_email, phone, address, city, state, website,
                 person_linkedin, company_linkedin, personal_email,
                 revenue, size, additional_info, generated_person,
-                status, priority, assigned_to, source
+                status, priority, assigned_to, source, facebook_url, instagram_url
             )
             WITH csv_raw AS (
                 SELECT ROW_NUMBER() OVER () AS _rn, *
@@ -1358,7 +1402,9 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
                 {col_status},
                 {col_priority},
                 '{client}',
-                '{workspace}'
+                '{workspace}',
+                {col_facebook_url},
+                {col_instagram_url}
             FROM numbered
             "#,
             path = safe_path,
@@ -1386,6 +1432,8 @@ params![member.name, member.email, member.phone, member.whatsapp, member.linkedi
             col_generated_person = get_col("generated_person", "'Auto'"),
             col_status = get_col("status", "'New'"),
             col_priority = get_col("priority", "'Medium'"),
+            col_facebook_url = get_col("facebook", "NULL"),
+            col_instagram_url = get_col("instagram", "NULL"),
         );
 
         self.conn.execute(&sql, []).map_err(|e| e.to_string())?;

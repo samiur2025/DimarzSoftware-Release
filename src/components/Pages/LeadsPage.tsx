@@ -17,7 +17,7 @@ async function safeInvoke<T>(cmd: string, args?: any): Promise<T> {
     if (cmd === "get_leads") {
       return {
         leads: [
-          { id: 1, sl: 1, country: "🇺🇸 USA", industry: "Technology", niche: "SaaS", business_name: "Mock Corp", person_name: "John Doe", title: "CEO", business_email: "test@test.com", phone: "555-0000", city: "SF", state: "CA", status: "New", priority: "High", website: "test.com", revenue: "$1M", size: "1-10", generated_person: "Auto" }
+          { id: 1, sl: 1, country: "🇺🇸 USA", industry: "Technology", niche: "SaaS", business_name: "Mock Corp", person_name: "John Doe", title: "CEO", business_email: "test@test.com", phone: "555-0000", city: "SF", state: "CA", status: "New", priority: "High", website: "test.com", revenue: "$1M", size: "1-10", generated_person: "Auto", facebook_url: "https://facebook.com", instagram_url: "https://instagram.com" }
         ],
         total: 1,
         page: 1,
@@ -60,6 +60,8 @@ interface Lead {
   size: string;
   additional_info?: string;
   generated_person: string;
+  facebook_url?: string;
+  instagram_url?: string;
 }
 
 // Backend pagination structure
@@ -87,6 +89,8 @@ const exportAllColumns = [
   { id: 'state', label: 'STATE' },
   { id: 'person_linkedin', label: 'PERSON LINKEDIN' },
   { id: 'company_linkedin', label: 'LINKEDIN COMPANY' },
+  { id: 'facebook_url', label: 'FACEBOOK' },
+  { id: 'instagram_url', label: 'INSTAGRAM' },
   { id: 'personal_email', label: 'PERSONAL EMAIL' },
   { id: 'revenue', label: 'REVENUE' },
   { id: 'size', label: 'EMPLOYEE SIZE' },
@@ -396,6 +400,8 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
               <th>State</th>
               <th>Person LinkedIn</th>
               <th>Company LinkedIn</th>
+              <th>Facebook</th>
+              <th>Instagram</th>
               <th>Personal Email</th>
               <th>Revenue</th>
               <th>Size</th>
@@ -405,7 +411,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
             </tr>
           </thead>
           <tbody>
-            {paddingTop > 0 && <tr><td colSpan={22} style={{ height: paddingTop, padding: 0, border: 0 }}></td></tr>}
+            {paddingTop > 0 && <tr><td colSpan={24} style={{ height: paddingTop, padding: 0, border: 0 }}></td></tr>}
             {virtualItems.map((virtualRow) => {
               const idx = virtualRow.index;
               const lead = visibleLeads[idx];
@@ -427,6 +433,8 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
                 <td>{lead.state}</td>
                 <td>{lead.person_linkedin ? <a href={lead.person_linkedin} target="_blank" rel="noopener noreferrer" className="linkedin-link">LinkedIn</a> : "-"}</td>
                 <td>{lead.company_linkedin ? <a href={lead.company_linkedin} target="_blank" rel="noopener noreferrer" className="linkedin-link">LinkedIn</a> : "-"}</td>
+                <td>{lead.facebook_url ? <a href={lead.facebook_url} target="_blank" rel="noopener noreferrer" className="linkedin-link">Facebook</a> : "-"}</td>
+                <td>{lead.instagram_url ? <a href={lead.instagram_url} target="_blank" rel="noopener noreferrer" className="linkedin-link">Instagram</a> : "-"}</td>
                 <td>{lead.personal_email ? <a href={`mailto:${lead.personal_email}`} className="email-link">{lead.personal_email}</a> : "-"}</td>
                 <td><span className="revenue">{lead.revenue}</span></td>
                 <td><span className="size-badge">{lead.size}</span></td>
@@ -441,7 +449,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
               </tr>
               );
             })}
-            {paddingBottom > 0 && <tr><td colSpan={22} style={{ height: paddingBottom, padding: 0, border: 0 }}></td></tr>}
+            {paddingBottom > 0 && <tr><td colSpan={24} style={{ height: paddingBottom, padding: 0, border: 0 }}></td></tr>}
           </tbody>
         </table>
       </div>

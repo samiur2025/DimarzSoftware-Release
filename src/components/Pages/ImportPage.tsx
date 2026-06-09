@@ -77,10 +77,11 @@ const ImportPage: React.FC<Props> = ({ className }) => {
       "COUNTRY", "INDUSTRY", "NICHE", "BUSINESS NAME", "WEBSITE", 
       "PERSON NAME", "TITLE", "BUSINESS EMAIL", "PHONE", "ADDRESS", 
       "CITY", "STATE", "PERSON LINKEDIN", "COMPANY LINKEDIN", 
-      "PERSONAL EMAIL", "REVENUE", "SIZE", "ADDITIONAL INFO", "GENERATED PERSON"
+      "FACEBOOK", "INSTAGRAM", "PERSONAL EMAIL", "REVENUE", "SIZE", 
+      "ADDITIONAL INFO", "GENERATED PERSON"
     ];
     const sampleRows = [
-      ["USA", "Technology", "SaaS", "Mock Corp", "mock.com", "John Doe", "CEO", "john@mock.com", "555-1001", "123 Tech St", "San Francisco", "CA", "linkedin.com/in/johndoe", "linkedin.com/company/mock", "personal@email.com", "$1M", "1-10", "Interested", "Auto"],
+      ["USA", "Technology", "SaaS", "Mock Corp", "mock.com", "John Doe", "CEO", "john@mock.com", "555-1001", "123 Tech St", "San Francisco", "CA", "linkedin.com/in/johndoe", "linkedin.com/company/mock", "facebook.com/mock", "instagram.com/mock", "personal@email.com", "$1M", "1-10", "Interested", "Auto"],
     ];
     const csvContent = [headers.join(","), ...sampleRows.map(row => row.map(cell => `"${cell}"`).join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });

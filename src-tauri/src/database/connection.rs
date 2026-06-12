@@ -61,12 +61,6 @@ impl Database {
                 facebook_url TEXT,
                 instagram_url TEXT
             );
-            DROP INDEX IF EXISTS idx_leads_country;
-            DROP INDEX IF EXISTS idx_leads_industry;
-            DROP INDEX IF EXISTS idx_leads_niche;
-            DROP INDEX IF EXISTS idx_leads_status;
-            DROP INDEX IF EXISTS idx_leads_priority;
-            
             CREATE SEQUENCE IF NOT EXISTS clients_seq;
             CREATE TABLE IF NOT EXISTS clients (
                 id INTEGER PRIMARY KEY DEFAULT nextval('clients_seq'),
@@ -162,9 +156,110 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             }
         }
 
+        // Create indexes to optimize filtering and searching across millions of rows
+        let indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_leads_country ON leads(country)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_industry ON leads(industry)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_niche ON leads(niche)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_size ON leads(size)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_title ON leads(title)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_state ON leads(state)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_city ON leads(city)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_generated_person ON leads(generated_person)",
+        ];
+        
+        for idx_query in indexes {
+            if let Err(e) = self.conn.execute(idx_query, []) {
+                log::warn!("Failed to create index: {}", e);
+            }
+        }
+
+        if let Err(e) = self.conn.execute(
+            "CREATE SEQUENCE IF NOT EXISTS transactions_seq;
+             CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY DEFAULT nextval('transactions_seq'),
+                date TEXT NOT NULL,
+                tx_type TEXT NOT NULL,
+                category TEXT NOT NULL,
+                amount REAL NOT NULL,
+                reference TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );",
+            [],
+        ) {
+            log::warn!("Failed to create transactions table: {}", e);
+        }
+
         Ok(())
     }
 
+    pub fn get_transactions(&self) -> Result<Vec<Transaction>, String> {
+        let mut stmt = self.conn.prepare("SELECT id, date, tx_type, category, amount, reference, notes, created_at FROM transactions ORDER BY date DESC, id DESC").map_err(|e| e.to_string())?;
+        let tx_iter = stmt.query_map([], |row| {
+            Ok(Transaction {
+                id: row.get(0)?,
+                date: row.get(1)?,
+                tx_type: row.get(2)?,
+                category: row.get(3)?,
+                amount: row.get(4)?,
+                reference: row.get(5)?,
+                notes: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        }).map_err(|e| e.to_string())?;
+
+        let mut transactions = Vec::new();
+        for tx in tx_iter {
+            if let Ok(t) = tx {
+                transactions.push(t);
+            }
+        }
+        Ok(transactions)
+    }
+
+    pub fn add_transaction(&self, tx: Transaction) -> Result<(), String> {
+        self.conn.execute(
+            "INSERT INTO transactions (date, tx_type, category, amount, reference, notes) VALUES (?, ?, ?, ?, ?, ?)",
+            params![tx.date, tx.tx_type, tx.category, tx.amount, tx.reference, tx.notes]
+        ).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_transaction(&self, id: i64) -> Result<(), String> {
+        self.conn.execute("DELETE FROM transactions WHERE id = ?", params![id]).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_transaction_summary(&self) -> Result<TransactionSummary, String> {
+        let mut total_income: f64 = 0.0;
+        let mut total_expenses: f64 = 0.0;
+
+        self.conn.query_row("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE tx_type = 'INCOME'", [], |r| {
+            total_income = r.get(0)?;
+            Ok(())
+        }).ok();
+
+        self.conn.query_row("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE tx_type = 'EXPENSE'", [], |r| {
+            total_expenses = r.get(0)?;
+            Ok(())
+        }).ok();
+
+        let mut outstanding_receivables: f64 = 0.0;
+        self.conn.query_row("SELECT COALESCE(SUM(value - paid), 0) FROM projects WHERE value > paid", [], |r| {
+            outstanding_receivables = r.get(0)?;
+            Ok(())
+        }).ok();
+
+        Ok(TransactionSummary {
+            total_income,
+            total_expenses,
+            net_profit: total_income - total_expenses,
+            outstanding_receivables,
+        })
+    }
 
     pub fn import_leads_csv(
         &self,

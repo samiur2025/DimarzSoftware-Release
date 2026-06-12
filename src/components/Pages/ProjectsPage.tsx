@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from "react";
 import { AppContext } from "../../App";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import { formatDate } from "../../utils";
 interface Props {
 className: string;
 }
@@ -473,29 +474,82 @@ return (
           
           {/* Client Financials Hub */}
           <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Header */}
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span>💼 Client Financials Hub</span>
-              <span style={{ color: "var(--text-primary)", fontSize: 14 }}>Total: {formatTaka(selectedProject.value)}</span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 500 }}>Contract value breakdown</span>
             </div>
-            
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, flex: 1 }}>
-              <div style={{ padding: 16, background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(59,130,246,0.2)", display: "flex", flexDirection: "column" }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Invoiced Amount</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "var(--info)", marginBottom: 12 }}>{formatTaka(selectedProject.invoiced)}</div>
-                <button onClick={() => openFinancialModal("invoice")} style={{ marginTop: "auto", width: "100%", padding: "8px 0", fontSize: 12, fontWeight: 600, background: "var(--info)", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", transition: "0.2s" }}>🧾 Issue Invoice</button>
-              </div>
-              
-              <div style={{ padding: 16, background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(34,197,94,0.2)", display: "flex", flexDirection: "column" }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Paid Amount</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "var(--success)", marginBottom: 12 }}>{formatTaka(selectedProject.paid)}</div>
-                <button onClick={() => openFinancialModal("payment")} disabled={selectedProject.invoiced === 0} style={{ marginTop: "auto", width: "100%", padding: "8px 0", fontSize: 12, fontWeight: 600, background: selectedProject.invoiced === 0 ? "rgba(34,197,94,0.4)" : "var(--success)", color: "#fff", border: "none", borderRadius: 6, cursor: selectedProject.invoiced === 0 ? "not-allowed" : "pointer", transition: "0.2s" }} title={selectedProject.invoiced === 0 ? "Cannot record payment before issuing an invoice" : ""}>💵 Record Payment</button>
-              </div>
-            </div>
-            
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "rgba(239,68,68,0.05)", borderRadius: 8, border: "1px solid rgba(239,68,68,0.2)" }}>
-              <span style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Balance Due</span>
-              <span style={{ fontSize: 16, color: "var(--danger)", fontWeight: 800 }}>{formatTaka(selectedProject.invoiced - selectedProject.paid)}</span>
-            </div>
+
+            {/* 4-metric grid */}
+            {(() => {
+              const uninvoiced = selectedProject.value - selectedProject.invoiced;
+              const balanceDue = selectedProject.invoiced - selectedProject.paid;
+              const collectionPct = selectedProject.value > 0 ? Math.min((selectedProject.paid / selectedProject.value) * 100, 100) : 0;
+              const invoicedPct = selectedProject.value > 0 ? Math.min((selectedProject.invoiced / selectedProject.value) * 100, 100) : 0;
+              return (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {/* Contract Value */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>📋 Contract Value</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>{formatTaka(selectedProject.value)}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Total agreed amount</div>
+                    </div>
+                    {/* Total Invoiced */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(74,144,212,0.25)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>🧾 Total Invoiced</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "var(--info)" }}>{formatTaka(selectedProject.invoiced)}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{invoicedPct.toFixed(0)}% of contract billed</div>
+                    </div>
+                    {/* Total Collected */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(61,184,122,0.25)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>✅ Total Collected</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "var(--success)" }}>{formatTaka(selectedProject.paid)}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{collectionPct.toFixed(0)}% of contract received</div>
+                    </div>
+                    {/* Uninvoiced Remaining */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: uninvoiced > 0 ? "1px solid rgba(212,146,74,0.3)" : "1px solid rgba(61,184,122,0.2)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>🕐 Uninvoiced Left</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: uninvoiced > 0 ? "var(--warning)" : "var(--success)" }}>{formatTaka(Math.max(uninvoiced, 0))}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{uninvoiced > 0 ? "Yet to be billed" : "Fully invoiced ✓"}</div>
+                    </div>
+                  </div>
+
+                  {/* Collection Rate Progress */}
+                  <div style={{ padding: "10px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Collection Progress</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)" }}>{formatTaka(selectedProject.paid)} / {formatTaka(selectedProject.value)}</span>
+                    </div>
+                    <div style={{ height: 6, background: "var(--bg-input)", borderRadius: 4, overflow: "hidden", position: "relative" }}>
+                      {/* Invoiced band */}
+                      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${invoicedPct}%`, background: "rgba(74,144,212,0.35)", borderRadius: 4, transition: "width 0.6s" }} title={`Invoiced: ${invoicedPct.toFixed(0)}%`} />
+                      {/* Paid band (on top) */}
+                      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${collectionPct}%`, background: "rgba(61,184,122,0.7)", borderRadius: 4, transition: "width 0.6s" }} title={`Collected: ${collectionPct.toFixed(0)}%`} />
+                    </div>
+                    <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 10, color: "var(--text-muted)" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "rgba(74,144,212,0.5)", display: "inline-block" }} /> Invoiced {invoicedPct.toFixed(0)}%</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "rgba(61,184,122,0.7)", display: "inline-block" }} /> Collected {collectionPct.toFixed(0)}%</span>
+                    </div>
+                  </div>
+
+                  {/* Balance Due alert */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: balanceDue > 0 ? "rgba(192,68,94,0.07)" : "rgba(61,184,122,0.07)", borderRadius: 8, border: balanceDue > 0 ? "1px solid rgba(192,68,94,0.25)" : "1px solid rgba(61,184,122,0.2)" }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Balance Due (Invoiced − Paid)</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Amount client owes from issued invoices</div>
+                    </div>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: balanceDue > 0 ? "var(--danger)" : "var(--success)" }}>{formatTaka(balanceDue)}</span>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <button onClick={() => openFinancialModal("invoice")} style={{ padding: "9px 0", fontSize: 12, fontWeight: 600, background: "var(--info)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", transition: "0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>🧾 Issue Invoice</button>
+                    <button onClick={() => openFinancialModal("payment")} disabled={selectedProject.invoiced === 0} style={{ padding: "9px 0", fontSize: 12, fontWeight: 600, background: selectedProject.invoiced === 0 ? "rgba(61,184,122,0.3)" : "var(--success)", color: "#fff", border: "none", borderRadius: 8, cursor: selectedProject.invoiced === 0 ? "not-allowed" : "pointer", transition: "0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} title={selectedProject.invoiced === 0 ? "Issue an invoice first" : ""}>💵 Record Payment</button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -626,7 +680,7 @@ return (
             </div>
             <div className="form-group" style={{ gridColumn: "1/-1" }}>
               <label className="form-label">Deadline</label>
-              <input type="date" className="form-input" value={editDraft.deadline || ""} onChange={e => setEditDraft({ ...editDraft, deadline: e.target.value })} />
+              <input type="date" className="form-input" value={editDraft.deadline || ""} onChange={e => { setEditDraft({ ...editDraft, deadline: e.target.value }); e.target.blur(); }} />
             </div>
           </div>
         </div>
@@ -695,7 +749,7 @@ return (
                   <select value={a.member_id} onChange={e => handleAssignmentChange(a.id, "member_id", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none" }}>
                     {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
-                  <input type="date" value={a.deadline} onChange={e => handleAssignmentChange(a.id, "deadline", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", width: "100%" }} />
+                  <input type="date" value={a.deadline} onChange={e => { handleAssignmentChange(a.id, "deadline", e.target.value); e.target.blur(); }} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", width: "100%" }} />
                   {isLeadGen && <input type="number" value={a.leads || ""} placeholder="0" onChange={e => handleAssignmentChange(a.id, "leads", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none", width: "100%" }} />}
                   {isLeadGen ? (
                     <input type="number" value={a.rate || ""} placeholder="0" onChange={e => handleAssignmentChange(a.id, "rate", e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 6, padding: "6px 8px", fontSize: 13, outline: "none", width: "100%" }} />
@@ -915,7 +969,7 @@ return (
   const waBreakdown = `*Project:* ${previewInvoice.name}\n*Total Value:* ${formatTaka(previewInvoice.value)}\n\n• *Total Invoiced:* ${formatTaka(previewInvoice.invoiced)}\n• *Total Paid:* -${formatTaka(previewInvoice.paid)}\n\n💰 *Remaining Due:* ${formatTaka(Math.max(0, due))}`;
   
   const emailSubject = `Invoice Statement: PRJ-${previewInvoice.id} - Dimarz`;
-  const emailBody = `Hello ${clientName},\n\nPlease find the details of your project invoice statement below.\n\n==================================\nINVOICE STATEMENT\n==================================\nReference  : PRJ-${previewInvoice.id}\nDate       : ${new Date().toLocaleDateString()}\n\n----------------------------------\nBREAKDOWN\n----------------------------------\n${textBreakdown}\n\nPlease see the attached PDF for your official records.\n\nBest regards,\nDimarz Team`;
+  const emailBody = `Hello ${clientName},\n\nPlease find the details of your project invoice statement below.\n\n==================================\nINVOICE STATEMENT\n==================================\nReference  : PRJ-${previewInvoice.id}\nDate       : ${formatDate(new Date())}\n\n----------------------------------\nBREAKDOWN\n----------------------------------\n${textBreakdown}\n\nPlease see the attached PDF for your official records.\n\nBest regards,\nDimarz Team`;
   const waMessage = `*INVOICE STATEMENT: PRJ-${previewInvoice.id}* 🧾\n_Dimarz Lead Software_\n\nHello *${clientName}*, here is your project billing summary:\n\n${waBreakdown}\n\n_Please let us know if you have any questions!_`;
 
   const handleSavePDF = async () => {
@@ -946,7 +1000,7 @@ return (
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>DIMARZ</div>
             <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase" }}>Lead Software</div>
-            <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Date: {new Date().toLocaleDateString()}</div>
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Date: {formatDate(new Date())}</div>
           </div>
         </div>
 

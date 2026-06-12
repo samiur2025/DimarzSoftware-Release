@@ -34,16 +34,40 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
       - name: Install frontend dependencies
         run: npm install
+
+      # Windows: Download pre-built DuckDB to avoid compiling 1000+ C++ files from source
+      # libduckdb-sys v1.10503.1 corresponds to DuckDB release v1.1.3
+      - name: Download pre-built DuckDB (Windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $duckdb_version = "v1.1.3"
+          $url = "https://github.com/duckdb/duckdb/releases/download/$duckdb_version/libduckdb-windows-amd64.zip"
+          Write-Host "Downloading DuckDB $duckdb_version from $url"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\libduckdb.zip"
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP\duckdb" -Force | Out-Null
+          Expand-Archive -Path "$env:RUNNER_TEMP\libduckdb.zip" -DestinationPath "$env:RUNNER_TEMP\duckdb" -Force
+          Write-Host "DuckDB extracted to $env:RUNNER_TEMP\duckdb"
+          Get-ChildItem "$env:RUNNER_TEMP\duckdb"
+          echo "DUCKDB_LIB_DIR=$env:RUNNER_TEMP\duckdb" >> $env:GITHUB_ENV
+          echo "DUCKDB_INCLUDE_DIR=$env:RUNNER_TEMP\duckdb" >> $env:GITHUB_ENV
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DUCKDB_LIB_DIR: ${{ env.DUCKDB_LIB_DIR }}
+          DUCKDB_INCLUDE_DIR: ${{ env.DUCKDB_INCLUDE_DIR }}
         with:
           tagName: v__VERSION__
           releaseName: 'DimarzSoftware v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseBody: 'See the assets below to download and install this version.'
           releaseDraft: true
           prerelease: false

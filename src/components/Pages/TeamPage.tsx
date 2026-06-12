@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AppContext } from "../../App";
 import { getSavedScripts, SavedScript, toCsvUrl, parseCsv } from "./GoogleFormScriptPage";
+import { formatDate, formatDateTime } from "../../utils";
 
 interface Props {
   className: string;
@@ -72,7 +73,7 @@ const TeamPage: React.FC<Props> = ({ className }) => {
       category: get("category", "role", "position", "job category", "applying for", "department"),
       address: get("address", "location", "city", "country", "your location"),
       status: "new",
-      submitted_date: get("timestamp", "date", "submitted", "submission date", "submission time") || new Date().toLocaleDateString(),
+      submitted_date: get("timestamp", "date", "submitted", "submission date", "submission time") || formatDateTime(new Date()),
       source: scriptName,
     };
   };
@@ -113,7 +114,7 @@ const TeamPage: React.FC<Props> = ({ className }) => {
 
         // update last synced
         const allScripts = getSavedScripts().map(s =>
-          s.id === script.id ? { ...s, lastSynced: new Date().toLocaleString() } : s
+          s.id === script.id ? { ...s, lastSynced: formatDateTime(new Date()) } : s
         );
         localStorage.setItem("dimrz_gform_scripts", JSON.stringify(allScripts));
       } catch (e) {
@@ -181,7 +182,7 @@ const TeamPage: React.FC<Props> = ({ className }) => {
       category: draftMember.category || "",
       address: draftMember.address || "",
       status: "new",
-      submitted_date: new Date().toLocaleDateString(),
+      submitted_date: formatDate(new Date()),
       source: "Manual Entry"
     };
     persistMembers([newMember, ...members]);

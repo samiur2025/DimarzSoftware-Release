@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { formatDateTime } from "../../utils";
 
 interface Props {
   className: string;
@@ -138,7 +139,7 @@ const GoogleFormScriptPage: React.FC<Props> = ({ className }) => {
       account: account.trim(),
       shareUrl: shareUrl.trim(),
       formUrl: formUrl.trim(),
-      savedAt: new Date().toLocaleString(),
+      savedAt: formatDateTime(new Date()),
       lastSynced: null,
     };
     persist([entry, ...scripts]);
@@ -161,7 +162,7 @@ const GoogleFormScriptPage: React.FC<Props> = ({ className }) => {
       const rows = parseCsv(text);
       localStorage.setItem(`dimrz_sheet_data_${script.id}`, JSON.stringify(rows));
       const updated = scripts.map(s =>
-        s.id === script.id ? { ...s, lastSynced: new Date().toLocaleString() } : s
+        s.id === script.id ? { ...s, lastSynced: formatDateTime(new Date()) } : s
       );
       persist(updated);
       alert(`Synced ${rows.length} row(s) from "${script.name}". Go to Onboarding page and click Sync Now.`);

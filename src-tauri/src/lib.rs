@@ -109,6 +109,10 @@ pub fn run() {
             commands::create_team_member,
             commands::update_team_member,
             commands::delete_team_member,
+            commands::get_transactions_cmd,
+            commands::add_transaction_cmd,
+            commands::delete_transaction_cmd,
+            commands::get_transaction_summary_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

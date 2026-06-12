@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from "react";
 import { AppContext } from "../../App";
+import { formatDate } from "../../utils";
 
 interface Props {
   className: string;
@@ -88,7 +89,7 @@ const InvoicesPage: React.FC<Props> = ({ className }) => {
                 displayId: `${p.id}`,
                 projectName: p.name,
                 projectType: p.project_type,
-                date: p.deadline || new Date(p.id).toLocaleDateString() || "N/A",
+                date: p.deadline || formatDate(p.id) || "N/A",
                 leads: a.leads,
                 rate: a.rate,
                 amount: cost,

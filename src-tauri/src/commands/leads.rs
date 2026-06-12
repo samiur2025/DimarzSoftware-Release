@@ -174,3 +174,53 @@ pub async fn clear_all_leads_cmd(app_handle: tauri::AppHandle) -> Result<i64, St
     .await
     .map_err(|e| e.to_string())?
 }
+
+// ─── Transaction Commands ───────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_transactions_cmd(app_handle: tauri::AppHandle) -> Result<Vec<crate::models::Transaction>, String> {
+    tokio::task::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
+        db.get_transactions()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn add_transaction_cmd(tx: crate::models::Transaction, app_handle: tauri::AppHandle) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
+        db.add_transaction(tx)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn delete_transaction_cmd(id: i64, app_handle: tauri::AppHandle) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
+        db.delete_transaction(id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_transaction_summary_cmd(app_handle: tauri::AppHandle) -> Result<crate::models::TransactionSummary, String> {
+    tokio::task::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db_lock = state.db.blocking_lock();
+        let db = db_lock.as_ref().ok_or("Database not initialized")?;
+        db.get_transaction_summary()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

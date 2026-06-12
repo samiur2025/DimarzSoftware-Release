@@ -265,3 +265,23 @@ pub struct StoredLicense {
     pub activated_at: String,
     pub expires_at: Option<String>,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Transaction {
+    pub id: i64,
+    pub date: String,
+    pub tx_type: String, // "INCOME" or "EXPENSE"
+    pub category: String,
+    pub amount: f64,
+    pub reference: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TransactionSummary {
+    pub total_income: f64,
+    pub total_expenses: f64,
+    pub net_profit: f64,
+    pub outstanding_receivables: f64,
+}

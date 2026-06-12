@@ -27,7 +27,7 @@ const SAMPLE_CLIENTS: Client[] = [];
 const SAMPLE_STATS: Map<number, ClientStats> = new Map();
 
 const ClientsPage: React.FC<Props> = ({ className }) => {
-const { triggerRefresh } = useContext(AppContext);
+const { triggerRefresh, showPage } = useContext(AppContext);
 
 const [clients, setClients] = useState<Client[]>(() => {
   const saved = localStorage.getItem("dimrz_clients");
@@ -402,7 +402,7 @@ return (
             <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 8, color: "var(--text-primary)" }}>{selectedClient.name}</div>
           )}
           
-          <div style={{ fontSize: 14, color: "var(--text-secondary)", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ fontSize: 14, color: "var(--text-secondary)", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
             {editMode && editDraft ? (
               <select value={editDraft.status} onChange={e => setEditDraft({ ...editDraft, status: e.target.value })} style={{ fontSize: 13, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "4px 8px", color: "var(--text-primary)" }}>
                 <option>Active</option>
@@ -424,67 +424,50 @@ return (
               <span className="source-badge">{selectedClient.source}</span>
             )}
           </div>
+
+          {/* Inline Contact Details */}
+          {editMode && editDraft ? (
+            <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <input value={editDraft.email || ""} onChange={e => setEditDraft({ ...editDraft, email: e.target.value })} style={{ width: "100%", fontSize: 12, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "6px 8px", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} placeholder="Email Address" />
+              <input value={editDraft.website || ""} onChange={e => setEditDraft({ ...editDraft, website: e.target.value })} style={{ width: "100%", fontSize: 12, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "6px 8px", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} placeholder="Website URL" />
+              <input value={editDraft.linkedin || ""} onChange={e => setEditDraft({ ...editDraft, linkedin: e.target.value })} style={{ width: "100%", fontSize: 12, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "6px 8px", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} placeholder="LinkedIn URL" />
+              <input value={editDraft.country || ""} onChange={e => setEditDraft({ ...editDraft, country: e.target.value })} style={{ width: "100%", fontSize: 12, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "6px 8px", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} placeholder="Country" />
+              <input value={editDraft.address || ""} onChange={e => setEditDraft({ ...editDraft, address: e.target.value })} style={{ width: "100%", fontSize: 12, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "6px 8px", color: "var(--text-primary)", outline: "none", boxSizing: "border-box", gridColumn: "1/-1" }} placeholder="Full Address" />
+              
+              <div style={{ display: "flex", gap: 8, gridColumn: "1/-1", justifyContent: "flex-end", marginTop: 4 }}>
+                <button className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: 12 }} onClick={cancelEdit}>✕ Cancel</button>
+                <button className="btn btn-primary" style={{ padding: "6px 16px", fontSize: 12 }} onClick={handleSaveEdit}>💾 Save Changes</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center", fontSize: 13, color: "var(--text-secondary)", background: "rgba(255,255,255,0.03)", padding: "10px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ opacity: 0.5 }}>📧</span>
+                {selectedClient.email ? <a href={`mailto:${selectedClient.email}`} style={{ color: "var(--text-primary)", textDecoration: "none" }}>{selectedClient.email}</a> : <span style={{ color: "var(--text-muted)" }}>—</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ opacity: 0.5 }}>🌐</span>
+                {selectedClient.website ? <a href={selectedClient.website.startsWith("http") ? selectedClient.website : `https://${selectedClient.website}`} target="_blank" rel="noreferrer" style={{ color: "var(--text-primary)", textDecoration: "none" }}>{selectedClient.website}</a> : <span style={{ color: "var(--text-muted)" }}>—</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ opacity: 0.5 }}>💼</span>
+                {selectedClient.linkedin ? <a href={selectedClient.linkedin.startsWith("http") ? selectedClient.linkedin : `https://${selectedClient.linkedin}`} target="_blank" rel="noreferrer" style={{ color: "var(--info)", textDecoration: "none" }}>LinkedIn Profile</a> : <span style={{ color: "var(--text-muted)" }}>—</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ opacity: 0.5 }}>🌍</span>
+                <span style={{ color: selectedClient.country ? "var(--text-primary)" : "var(--text-muted)" }}>{selectedClient.country || "—"}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ opacity: 0.5 }}>📍</span>
+                <span style={{ color: selectedClient.address ? "var(--text-primary)" : "var(--text-muted)" }}>{selectedClient.address || "—"}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Content */}
       <div style={{ padding: 32, display: "flex", flexDirection: "column", gap: 32 }}>
-        
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-          {/* Contact Info */}
-          <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 14, minWidth: 0, overflow: "hidden" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>📞 Contact Info</div>
-            {([
-              ["Email", "email"],
-              ["Website", "website"],
-              ["LinkedIn", "linkedin"],
-              ["Country", "country"],
-            ] as [string, keyof Client][]).map(([label, key]) => (
-              <div key={key} style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
-                {editMode && editDraft ? (
-                  <input value={(editDraft[key] as string) || ""} onChange={e => setEditDraft({ ...editDraft, [key]: e.target.value })} style={{ width: "100%", fontSize: 13, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "5px 8px", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} placeholder={label} />
-                ) : (
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", wordBreak: "break-word", overflow: "hidden" }}>
-                    {key === "email" && selectedClient.email
-                      ? <a href={`mailto:${selectedClient.email}`} style={{ color: "var(--info)", textDecoration: "none" }}>{selectedClient.email}</a>
-                      : key === "website" && selectedClient.website
-                      ? <a href={selectedClient.website.startsWith("http") ? selectedClient.website : `https://${selectedClient.website}`} target="_blank" rel="noreferrer" style={{ color: "var(--info)", textDecoration: "none" }}>{selectedClient.website}</a>
-                      : key === "linkedin" && selectedClient.linkedin
-                      ? <a href={selectedClient.linkedin.startsWith("http") ? selectedClient.linkedin : `https://${selectedClient.linkedin}`} target="_blank" rel="noreferrer" style={{ color: "var(--info)", textDecoration: "none", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={selectedClient.linkedin}>Visit Profile ↗</a>
-                      : (selectedClient[key] as string) || <span style={{ color: "var(--text-muted)" }}>—</span>}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          
-          {/* Business Details */}
-          <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 14, minWidth: 0, overflow: "hidden" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>💼 Business Details</div>
-            {([
-              ["Address", "address"],
-            ] as [string, keyof Client][]).map(([label, key]) => (
-              <div key={key} style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
-                {editMode && editDraft ? (
-                  <input type="text" value={(editDraft[key] as string) || ""} onChange={e => setEditDraft({ ...editDraft, [key]: e.target.value })} style={{ width: "100%", fontSize: 13, background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "5px 8px", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} placeholder={label} />
-                ) : (
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", wordBreak: "break-word" }}>
-                    {(selectedClient[key] as string) || <span style={{ color: "var(--text-muted)" }}>—</span>}
-                  </div>
-                )}
-              </div>
-            ))}
-            
-            {editMode ? (
-              <div style={{ marginTop: "auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, paddingTop: 16 }}>
-                <button className="btn btn-secondary" style={{ padding: "8px", fontSize: 13 }} onClick={cancelEdit}>✕ Cancel</button>
-                <button className="btn btn-primary" style={{ padding: "8px", fontSize: 13 }} onClick={handleSaveEdit}>💾 Save</button>
-              </div>
-            ) : null}
-          </div>
-        </div>
 
         {/* Projects List Section */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -493,26 +476,71 @@ return (
              const totalValue = clientProjects.reduce((s, p) => s + p.value, 0);
              const totalInvoiced = clientProjects.reduce((s, p) => s + p.invoiced, 0);
              const totalPaid = clientProjects.reduce((s, p) => s + p.paid, 0);
-             const totalDue = totalInvoiced - totalPaid;
+             
+             const uninvoiced = totalValue - totalInvoiced;
+             const balanceDue = totalInvoiced - totalPaid;
+             const collectionPct = totalValue > 0 ? Math.min((totalPaid / totalValue) * 100, 100) : 0;
+             const invoicedPct = totalValue > 0 ? Math.min((totalInvoiced / totalValue) * 100, 100) : 0;
+             
              return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 8 }}>
-                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--text-primary)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Project Value</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>{formatTaka(totalValue)}</div>
-                  </div>
-                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--info)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Invoiced</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--info)" }}>{formatTaka(totalInvoiced)}</div>
-                  </div>
-                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--success)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Paid</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--success)" }}>{formatTaka(totalPaid)}</div>
-                  </div>
-                  <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--danger)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Due</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--danger)" }}>{formatTaka(totalDue)}</div>
-                  </div>
-                </div>
+               <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 14, marginBottom: 8 }}>
+                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                   <span>💼 Client Financials Hub</span>
+                   <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 500 }}>Overall account health</span>
+                 </div>
+                 
+                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
+                    {/* Contract Value */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>📋 Total Value</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>{formatTaka(totalValue)}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>All projects combined</div>
+                    </div>
+                    {/* Total Invoiced */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(74,144,212,0.25)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>🧾 Total Invoiced</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "var(--info)" }}>{formatTaka(totalInvoiced)}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{invoicedPct.toFixed(0)}% of total value</div>
+                    </div>
+                    {/* Total Collected */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid rgba(61,184,122,0.25)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>✅ Total Collected</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "var(--success)" }}>{formatTaka(totalPaid)}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{collectionPct.toFixed(0)}% of total value</div>
+                    </div>
+                    {/* Uninvoiced Remaining */}
+                    <div style={{ padding: "12px 14px", background: "var(--bg-panel)", borderRadius: 8, border: uninvoiced > 0 ? "1px solid rgba(212,146,74,0.3)" : "1px solid rgba(61,184,122,0.2)" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>🕐 Uninvoiced Left</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: uninvoiced > 0 ? "var(--warning)" : "var(--success)" }}>{formatTaka(Math.max(uninvoiced, 0))}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{uninvoiced > 0 ? "Yet to be billed" : "Fully invoiced ✓"}</div>
+                    </div>
+                 </div>
+
+                 {/* Collection Rate Progress */}
+                 <div style={{ padding: "10px 14px", background: "var(--bg-panel)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                     <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Account Collection Progress</span>
+                     <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)" }}>{formatTaka(totalPaid)} / {formatTaka(totalValue)}</span>
+                   </div>
+                   <div style={{ height: 6, background: "var(--bg-input)", borderRadius: 4, overflow: "hidden", position: "relative" }}>
+                     <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${invoicedPct}%`, background: "rgba(74,144,212,0.35)", borderRadius: 4, transition: "width 0.6s" }} title={`Invoiced: ${invoicedPct.toFixed(0)}%`} />
+                     <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${collectionPct}%`, background: "rgba(61,184,122,0.7)", borderRadius: 4, transition: "width 0.6s" }} title={`Collected: ${collectionPct.toFixed(0)}%`} />
+                   </div>
+                   <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 10, color: "var(--text-muted)" }}>
+                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "rgba(74,144,212,0.5)", display: "inline-block" }} /> Invoiced {invoicedPct.toFixed(0)}%</span>
+                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "rgba(61,184,122,0.7)", display: "inline-block" }} /> Collected {collectionPct.toFixed(0)}%</span>
+                   </div>
+                 </div>
+
+                 {/* Balance Due alert */}
+                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: balanceDue > 0 ? "rgba(192,68,94,0.07)" : "rgba(61,184,122,0.07)", borderRadius: 8, border: balanceDue > 0 ? "1px solid rgba(192,68,94,0.25)" : "1px solid rgba(61,184,122,0.2)" }}>
+                   <div>
+                     <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>Current Balance Due (Invoiced − Paid)</div>
+                     <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Amount the client currently owes from issued invoices across all projects</div>
+                   </div>
+                   <span style={{ fontSize: 18, fontWeight: 800, color: balanceDue > 0 ? "var(--danger)" : "var(--success)" }}>{formatTaka(balanceDue)}</span>
+                 </div>
+               </div>
              );
           })()}
           <div style={{ fontSize: 16, fontWeight: 700, borderBottom: "1px solid var(--border-color)", paddingBottom: 8 }}>Associated Projects</div>
@@ -540,7 +568,20 @@ return (
                     const statusMap: Record<string, string> = { active: "status-contacted", pending: "status-qualified", completed: "status-new", onhold: "status-lost", cancelled: "status-lost" };
                     return (
                       <tr key={p.id}>
-                        <td>#{p.id}</td>
+                        <td>
+                          <button 
+                            onClick={() => {
+                              showPage("projects");
+                              setTimeout(() => {
+                                window.dispatchEvent(new CustomEvent("open-project-view", { detail: { projectId: p.id } }));
+                              }, 50);
+                            }}
+                            style={{ background: "none", border: "none", color: "var(--info)", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 600, textDecoration: "underline" }}
+                            title="Open Project Details"
+                          >
+                            #{p.id}
+                          </button>
+                        </td>
                         <td style={{ maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 500 }} title={p.name}>{p.name}</td>
                         <td><span className="type-badge" style={{ fontSize: 10 }}>{p.project_type}</span></td>
                         <td className="financial-cell">{formatTaka(p.value)}</td>

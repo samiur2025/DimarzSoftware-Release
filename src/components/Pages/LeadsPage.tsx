@@ -106,21 +106,23 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [localSearch, setLocalSearch] = useState(leadsFilters.search || "");
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     setLocalSearch(leadsFilters.search || "");
   }, [leadsFilters.search]);
 
   const debouncedSearch = useDebouncedCallback((value: string) => {
-    setLeadsFilters(prev => ({ ...prev, search: value, page: 1 })); // Reset to page 1 on new search
-  }, 500);
+    setLeadsFilters(prev => ({ ...prev, search: value, page: 1 }));
+  }, 300);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setLocalSearch(e.target.value);
+    setSearching(true); // show instant feedback
     debouncedSearch(e.target.value);
   };
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   
@@ -197,6 +199,7 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
       showToast(`Error loading leads: ${e}`, "error");
     } finally {
       setLoading(false);
+      setSearching(false); // clear searching state when done
     }
   };
 
@@ -369,12 +372,12 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
         <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div className="search-box" style={{ position: "relative", width: 320 }}>
             <span className="search-icon" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>
-              {loading ? <div className="spinner" style={{width: 14, height: 14, borderWidth: 2}} /> : "🔍"}
+              {(loading || searching) ? <div className="spinner" style={{width: 14, height: 14, borderWidth: 2}} /> : "🔍"}
             </span>
             <input type="text" placeholder="Search leads, companies, persons..." id="mainSearch"
               value={localSearch}
-              onChange={handleSearchChange} 
-              style={{ width: "100%", padding: "8px 12px 8px 36px", background: "var(--bg-input)", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, outline: "none" }} />
+              onChange={handleSearchChange}
+              style={{ width: "100%", padding: "8px 12px 8px 36px", background: "var(--bg-input)", border: `1px solid ${searching || loading ? "var(--accent-red)" : "var(--border-color)"}`, borderRadius: 8, color: "var(--text-primary)", fontSize: 13, outline: "none", transition: "border-color 0.2s" }} />
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setLeadsFilters(prev => ({...prev, search: ""}))} style={{ fontSize: 12, padding: "6px 12px" }}><span>↺</span> Reset Search</button>
@@ -459,8 +462,10 @@ const LeadsPage: React.FC<Props> = ({ className }) => {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <select className="page-size-select" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}>
             <option value={15}>15</option>
+            <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
+            <option value={250}>250</option>
           </select>
           <div className="pagination-controls">
             <button className="page-btn" onClick={() => setPage(1)} disabled={page === 1}>«</button>

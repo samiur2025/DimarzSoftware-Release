@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AppContext } from "../../App";
+import { formatDate } from "../../utils";
 import { Project } from "./ProjectsPage";
 import { open } from "@tauri-apps/plugin-shell";
 import { writeFile } from "@tauri-apps/plugin-fs";
@@ -115,7 +116,7 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
       category: draftMember.category || "",
       address: draftMember.address || "",
       status: "reviewed",
-      submitted_date: new Date().toLocaleDateString(),
+      submitted_date: formatDate(new Date()),
       source: "Manual Entry"
     };
     persistMembers([...members, newMember]);
@@ -533,28 +534,49 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
               {/* Projects List Section */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {(() => {
+                   let totalEarnings = 0;
+                   let totalPaid = 0;
+                   let activeProjects = 0;
+                   
                    const teamProjects = projects.filter(p => p.assignments?.some(a => String(a.member_id) === String(selectedMember.id)));
-                   const totalValue = teamProjects.reduce((s, p) => s + p.value, 0);
-                   const totalInvoiced = teamProjects.reduce((s, p) => s + p.invoiced, 0);
-                   const totalPaid = teamProjects.reduce((s, p) => s + p.paid, 0);
-                   const totalDue = totalInvoiced - totalPaid;
+                   
+                   teamProjects.forEach(p => {
+                     const assignment = p.assignments?.find(a => String(a.member_id) === String(selectedMember.id));
+                     if (assignment) {
+                       const cost = p.project_type === "Lead Generation" ? assignment.leads * assignment.rate : assignment.rate;
+                       totalEarnings += cost;
+                       
+                       if (assignment.payments) {
+                         assignment.payments.forEach(pay => {
+                           totalPaid += pay.amount;
+                         });
+                       }
+                       
+                       if (p.status !== "completed" && p.status !== "cancelled") {
+                         activeProjects++;
+                       }
+                     }
+                   });
+                   
+                   const totalDue = Math.max(0, totalEarnings - totalPaid);
+
                    return (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 8 }}>
                         <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--text-primary)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Project Value</div>
-                          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>{formatTaka(totalValue)}</div>
-                        </div>
-                        <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--info)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Invoiced</div>
-                          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--info)" }}>{formatTaka(totalInvoiced)}</div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Earnings</div>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>{formatTaka(totalEarnings)}</div>
                         </div>
                         <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--success)" }}>
                           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Paid</div>
                           <div style={{ fontSize: 20, fontWeight: 700, color: "var(--success)" }}>{formatTaka(totalPaid)}</div>
                         </div>
                         <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--danger)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Total Due</div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Balance Due</div>
                           <div style={{ fontSize: 20, fontWeight: 700, color: "var(--danger)" }}>{formatTaka(totalDue)}</div>
+                        </div>
+                        <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, border: "1px solid var(--border-color)", borderLeft: "4px solid var(--info)" }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Active Projects</div>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--info)" }}>{activeProjects}</div>
                         </div>
                       </div>
                    );
@@ -636,19 +658,7 @@ const MyTeamPage: React.FC<Props> = ({ className }) => {
                       }));
                     }
                     
-                    return [{
-                      projectId: `${p.id}`,
-                      displayId: `${p.id}`,
-                      projectName: p.name,
-                      projectType: p.project_type,
-                      date: p.deadline || new Date(p.id).toLocaleDateString() || "N/A",
-                      leads: assignment.leads,
-                      rate: assignment.rate,
-                      amount: p.project_type === "Lead Generation" ? assignment.leads * assignment.rate : assignment.rate,
-                      isPartial: false,
-                      totalCost: p.project_type === "Lead Generation" ? assignment.leads * assignment.rate : assignment.rate,
-                      isRevised: assignment.is_revised || false
-                    }];
+                    return [];
                   }).sort((a, b) => {
                     const aId = Number(a.displayId);
                     const bId = Number(b.displayId);

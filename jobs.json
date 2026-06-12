@@ -1,0 +1,329 @@
+{
+  "total_count": 3,
+  "jobs": [
+    {
+      "id": 80959597204,
+      "run_id": 27394751426,
+      "workflow_name": "Release",
+      "head_branch": "v1.1.6",
+      "run_url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/actions/runs/27394751426",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOS4Nt5s8AAAAS2ZFqlA",
+      "head_sha": "3c77bf6e2584524a8b1aac6f8db9b3675f9fdda6",
+      "url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/actions/jobs/80959597204",
+      "html_url": "https://github.com/samiur2025/DimarzSoftware-Release/actions/runs/27394751426/job/80959597204",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-06-12T04:35:25Z",
+      "started_at": "2026-06-12T04:35:29Z",
+      "completed_at": "2026-06-12T04:50:00Z",
+      "name": "release (macos-latest)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-06-12T04:35:30Z",
+          "completed_at": "2026-06-12T04:35:32Z"
+        },
+        {
+          "name": "Checkout repository",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-06-12T04:35:32Z",
+          "completed_at": "2026-06-12T04:35:33Z"
+        },
+        {
+          "name": "Install dependencies (ubuntu only)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 3,
+          "started_at": "2026-06-12T04:35:33Z",
+          "completed_at": "2026-06-12T04:35:33Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-06-12T04:35:33Z",
+          "completed_at": "2026-06-12T04:35:39Z"
+        },
+        {
+          "name": "Install Rust stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-06-12T04:35:39Z",
+          "completed_at": "2026-06-12T04:35:48Z"
+        },
+        {
+          "name": "Install frontend dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-06-12T04:35:48Z",
+          "completed_at": "2026-06-12T04:35:52Z"
+        },
+        {
+          "name": "Build Tauri app",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-06-12T04:35:52Z",
+          "completed_at": "2026-06-12T04:49:54Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-06-12T04:49:54Z",
+          "completed_at": "2026-06-12T04:49:55Z"
+        },
+        {
+          "name": "Post Checkout repository",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-06-12T04:49:55Z",
+          "completed_at": "2026-06-12T04:49:55Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-06-12T04:49:55Z",
+          "completed_at": "2026-06-12T04:49:57Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/check-runs/80959597204",
+      "labels": [
+        "macos-latest"
+      ],
+      "runner_id": 1000000030,
+      "runner_name": "GitHub Actions 1000000030",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 80959597290,
+      "run_id": 27394751426,
+      "workflow_name": "Release",
+      "head_branch": "v1.1.6",
+      "run_url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/actions/runs/27394751426",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOS4Nt5s8AAAAS2ZFq6g",
+      "head_sha": "3c77bf6e2584524a8b1aac6f8db9b3675f9fdda6",
+      "url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/actions/jobs/80959597290",
+      "html_url": "https://github.com/samiur2025/DimarzSoftware-Release/actions/runs/27394751426/job/80959597290",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-06-12T04:35:25Z",
+      "started_at": "2026-06-12T04:35:27Z",
+      "completed_at": "2026-06-12T04:54:11Z",
+      "name": "release (ubuntu-22.04)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-06-12T04:35:27Z",
+          "completed_at": "2026-06-12T04:35:29Z"
+        },
+        {
+          "name": "Checkout repository",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-06-12T04:35:29Z",
+          "completed_at": "2026-06-12T04:35:29Z"
+        },
+        {
+          "name": "Install dependencies (ubuntu only)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-06-12T04:35:29Z",
+          "completed_at": "2026-06-12T04:35:53Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-06-12T04:35:53Z",
+          "completed_at": "2026-06-12T04:35:57Z"
+        },
+        {
+          "name": "Install Rust stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-06-12T04:35:57Z",
+          "completed_at": "2026-06-12T04:35:59Z"
+        },
+        {
+          "name": "Install frontend dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-06-12T04:35:59Z",
+          "completed_at": "2026-06-12T04:36:02Z"
+        },
+        {
+          "name": "Build Tauri app",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-06-12T04:36:02Z",
+          "completed_at": "2026-06-12T04:54:09Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-06-12T04:54:09Z",
+          "completed_at": "2026-06-12T04:54:09Z"
+        },
+        {
+          "name": "Post Checkout repository",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-06-12T04:54:09Z",
+          "completed_at": "2026-06-12T04:54:09Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-06-12T04:54:09Z",
+          "completed_at": "2026-06-12T04:54:09Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/check-runs/80959597290",
+      "labels": [
+        "ubuntu-22.04"
+      ],
+      "runner_id": 1000000031,
+      "runner_name": "GitHub Actions 1000000031",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 80959597351,
+      "run_id": 27394751426,
+      "workflow_name": "Release",
+      "head_branch": "v1.1.6",
+      "run_url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/actions/runs/27394751426",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOS4Nt5s8AAAAS2ZFrJw",
+      "head_sha": "3c77bf6e2584524a8b1aac6f8db9b3675f9fdda6",
+      "url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/actions/jobs/80959597351",
+      "html_url": "https://github.com/samiur2025/DimarzSoftware-Release/actions/runs/27394751426/job/80959597351",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-06-12T04:35:25Z",
+      "started_at": "2026-06-12T04:35:27Z",
+      "completed_at": "2026-06-12T04:51:58Z",
+      "name": "release (windows-latest)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-06-12T04:35:28Z",
+          "completed_at": "2026-06-12T04:35:29Z"
+        },
+        {
+          "name": "Checkout repository",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-06-12T04:35:29Z",
+          "completed_at": "2026-06-12T04:35:33Z"
+        },
+        {
+          "name": "Install dependencies (ubuntu only)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 3,
+          "started_at": "2026-06-12T04:35:33Z",
+          "completed_at": "2026-06-12T04:35:33Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-06-12T04:35:33Z",
+          "completed_at": "2026-06-12T04:35:41Z"
+        },
+        {
+          "name": "Install Rust stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-06-12T04:35:41Z",
+          "completed_at": "2026-06-12T04:35:47Z"
+        },
+        {
+          "name": "Install frontend dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-06-12T04:35:47Z",
+          "completed_at": "2026-06-12T04:35:59Z"
+        },
+        {
+          "name": "Build Tauri app",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 7,
+          "started_at": "2026-06-12T04:35:59Z",
+          "completed_at": "2026-06-12T04:51:53Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 13,
+          "started_at": "2026-06-12T04:51:53Z",
+          "completed_at": "2026-06-12T04:51:53Z"
+        },
+        {
+          "name": "Post Checkout repository",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-06-12T04:51:53Z",
+          "completed_at": "2026-06-12T04:51:56Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-06-12T04:51:56Z",
+          "completed_at": "2026-06-12T04:51:56Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/samiur2025/DimarzSoftware-Release/check-runs/80959597351",
+      "labels": [
+        "windows-latest"
+      ],
+      "runner_id": 1000000032,
+      "runner_name": "GitHub Actions 1000000032",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

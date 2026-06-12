@@ -1,6 +1,6 @@
 [package]
 name = "dimrz-desktop"
-version = "1.1.8"
+version = "1.1.9"
 description = "Dimrz - Digital Marketing Zone Desktop App"
 authors = ["Dimrz Team"]
 license = "Proprietary"
@@ -31,11 +31,11 @@ crossbeam-channel = "0.5.15"
 
 # On Linux/macOS: compile DuckDB from source (bundled)
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-duckdb = { version = "1.0", features = ["bundled", "chrono"] }
+duckdb = { version = "=1.1.1", features = ["bundled", "chrono"] }
 
 # On Windows: link against pre-built DuckDB (DUCKDB_LIB_DIR is set in CI)
 [target.'cfg(target_os = "windows")'.dependencies]
-duckdb = { version = "1.0", features = ["chrono"] }
+duckdb = { version = "=1.1.1", features = ["chrono"] }
 winreg = "0.52"
 
 [features]

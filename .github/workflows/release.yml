@@ -48,7 +48,7 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $duckdb_version = "v1.1.5"
+          $duckdb_version = "v1.1.1"
           $url = "https://github.com/duckdb/duckdb/releases/download/$duckdb_version/libduckdb-windows-amd64.zip"
           Write-Host "Downloading DuckDB $duckdb_version from $url"
           Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\libduckdb.zip"
